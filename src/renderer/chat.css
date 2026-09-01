@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+  --ink: #243044;
+  --muted: #68758a;
+  --blue: #275d8c;
+  --blue-soft: #e8f0f8;
+  --green-soft: #e6f3ec;
+  --line: #d8dee8;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 300px; min-height: 100vh; color: var(--ink); background: #f3f5f7; }
+button, textarea { font: inherit; }
+button { border: 0; border-radius: 6px; padding: 9px 13px; background: var(--blue); color: white; font-weight: 700; cursor: pointer; }
+button:hover { background: #1f4f79; }
+button:disabled { cursor: default; opacity: .5; }
+
+.chat-app { height: 100vh; display: flex; flex-direction: column; padding: 14px; }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+h1 { margin: 0; color: var(--ink); font-size: 18px; letter-spacing: 0; }
+.chat-header p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.icon-button { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); background: white; color: var(--muted); font-size: 20px; line-height: 1; }
+.icon-button:hover { background: #fff3f2; color: #9d3434; }
+
+.chat-list { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 8px; padding: 12px 2px; }
+.message { max-width: 88%; padding: 8px 10px; border-radius: 8px; line-height: 1.5; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.message.user { justify-self: end; color: #234c70; background: var(--blue-soft); }
+.message.assistant { justify-self: start; color: #28543f; background: var(--green-soft); }
+.empty { align-self: center; justify-self: center; color: #8b95a4; text-align: center; font-size: 12px; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; border-top: 1px solid var(--line); padding-top: 11px; }
+textarea { width: 100%; min-height: 50px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; color: var(--ink); background: white; outline: none; }
+textarea:focus { border-color: #7599ba; box-shadow: 0 0 0 3px rgba(39, 93, 140, .11); }

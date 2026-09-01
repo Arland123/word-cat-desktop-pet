@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>单词猫咪 · 打卡面板</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <h1>单词打卡</h1>
+        <p id="streak-line">正在载入今天的进度…</p>
+      </div>
+      <button id="remind-button" class="ghost" type="button">立即提醒</button>
+    </header>
+
+    <section class="stats" aria-label="学习统计">
+      <article><span id="stat-today">0</span><label>今日打卡</label></article>
+      <article><span id="stat-goal">20</span><label>每日目标</label></article>
+      <article><span id="stat-streak">0</span><label>连续天数</label></article>
+      <article><span id="stat-total">0</span><label>累计打卡</label></article>
+    </section>
+
+    <main class="workspace">
+      <div class="primary-column">
+        <section class="card checkin-card">
+          <div class="card-head"><h2>今日进度</h2><span id="today-date"></span></div>
+          <div class="progress-copy"><strong id="progress-count">0 / 20</strong><span id="progress-label">还差 20 个单词</span></div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="20" aria-valuenow="0"><div id="progress-fill"></div></div>
+          <div class="checkin-actions">
+            <button id="checkin-button" type="button">完成一个单词</button>
+            <button id="undo-button" class="ghost" type="button">撤销一次</button>
+          </div>
+        </section>
+
+        <section class="card chat-card">
+          <div class="card-head"><h2>和猫咪聊聊</h2><button id="clear-chat" class="icon-command" type="button" title="清空对话" aria-label="清空对话">×</button></div>
+          <div id="chat-list" class="chat-list"><p class="empty">输入一句话，和猫咪聊聊。</p></div>
+          <form id="chat-form" class="chat-form">
+            <textarea id="chat-input" rows="2" placeholder="和猫咪说点什么…" required></textarea>
+            <button type="submit">发送</button>
+          </form>
+        </section>
+      </div>
+
+      <aside>
+        <section class="card">
+          <div class="card-head"><h2>打卡设置</h2></div>
+          <form id="settings-form" class="settings">
+            <label>每日目标（词）<input id="goal" type="number" min="1" max="500" required></label>
+            <label>提醒间隔（分钟）<input id="interval" type="number" min="5" max="480" required></label>
+            <div class="time-row"><label>开始<input id="start-time" type="time" required></label><label>结束<input id="end-time" type="time" required></label></div>
+            <label class="check"><input id="sound" type="checkbox"> 提醒音效</label>
+            <button type="submit">保存打卡设置</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>StepFun 设置</h2></div>
+          <form id="api-form" class="settings">
+            <label>API Key<input id="api-key" type="password" placeholder="API Key" autocomplete="off"></label>
+            <label>模型<input id="model" value="step-3.7-flash" autocomplete="off"></label>
+            <label>接口地址<input id="endpoint" type="url" autocomplete="off"></label>
+            <button type="submit">保存 API 设置</button>
+          </form>
+        </section>
+      </aside>
+    </main>
+
+    <section class="card history">
+      <div class="card-head"><h2>最近 14 天</h2><span>点击日期补录</span></div>
+      <div id="history" class="history-grid"></div>
+    </section>
+  </div>
+
+  <div id="toast" role="status"></div>
+  <div id="record-modal" class="modal hidden">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="record-title">
+      <h3 id="record-title">补录</h3>
+      <input id="record-count" type="number" min="0" max="500">
+      <div class="modal-actions"><button id="record-cancel" class="ghost" type="button">取消</button><button id="record-save" type="button">保存</button></div>
+    </div>
+  </div>
+  <script src="panel.js"></script>
+</body>
+</html>

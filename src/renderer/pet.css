@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; user-select: none; }
+
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+#stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: end center;
+  padding-bottom: 4px;
+  -webkit-app-region: no-drag;
+  cursor: default;
+}
+
+#cat {
+  width: 236px;
+  filter: drop-shadow(0 14px 16px rgba(20, 48, 85, .16));
+  transform-origin: 50% 100%;
+  -webkit-app-region: no-drag;
+  cursor: grab;
+}
+
+#cat:active { cursor: grabbing; }
+
+#cat-image { display: block; width: 236px; height: auto; pointer-events: none; }
+
+#cat.idle { animation: breathe 3s ease-in-out infinite; }
+#cat.remind { animation: jump .8s cubic-bezier(.25, .8, .35, 1) 2; }
+#cat.happy { animation: happy .9s ease 2; }
+
+#bubble {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  min-width: 116px;
+  padding: 10px 15px;
+  border: 3px solid #23477a;
+  border-radius: 20px;
+  background: white;
+  color: #23477a;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+  box-shadow: 0 8px 20px rgba(35, 71, 122, .18);
+  transition: opacity .25s, transform .25s;
+}
+
+#bubble.hidden { opacity: 0; transform: translateX(-50%) translateY(8px); pointer-events: none; }
+
+@keyframes breathe {
+  50% { transform: translateY(-5px) scale(1.015); }
+}
+
+@keyframes tail {
+  50% { transform: rotate(14deg); }
+}
+
+@keyframes jump {
+  25% { transform: translateY(-28px); }
+  50% { transform: translateY(0) scaleY(.92); }
+  75% { transform: translateY(-15px); }
+}
+
+@keyframes happy {
+  25% { transform: rotate(-7deg) translateY(-12px); }
+  75% { transform: rotate(7deg) translateY(-12px); }
+}

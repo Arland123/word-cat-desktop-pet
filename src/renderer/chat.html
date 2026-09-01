@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>小猫聊天</title>
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+  <main class="chat-app">
+    <header class="chat-header">
+      <div>
+        <h1>和小猫聊聊</h1>
+        <p>会参考你的单词打卡进度</p>
+      </div>
+      <button id="clear-chat" class="icon-button" type="button" title="清空对话" aria-label="清空对话">×</button>
+    </header>
+    <section id="chat-list" class="chat-list" aria-live="polite"><p class="empty">说点什么吧，喵。</p></section>
+    <form id="chat-form" class="chat-form">
+      <textarea id="chat-input" rows="2" placeholder="输入消息…" required></textarea>
+      <button type="submit">发送</button>
+    </form>
+  </main>
+  <script src="chat.js"></script>
+</body>
+</html>
