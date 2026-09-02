@@ -211,8 +211,9 @@ function renderChat() {
   elements.chatList.scrollTop = elements.chatList.scrollHeight;
 }
 
-elements.chatForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
+async function sendChatMessage(event) {
+  if (event) event.preventDefault();
+  if (elements.chatForm.querySelector('button').disabled) return;
   const content = elements.chatInput.value.trim();
   if (!content) return;
   chatMessages.push({ role: 'user', content });
@@ -239,7 +240,14 @@ elements.chatForm.addEventListener('submit', async (event) => {
     renderChat();
     elements.chatInput.focus();
   }
+}
+
+elements.chatInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  sendChatMessage();
 });
+elements.chatForm.addEventListener('submit', sendChatMessage);
 
 elements.clearChat.addEventListener('click', () => { chatMessages = []; renderChat(); });
 

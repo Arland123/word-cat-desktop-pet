@@ -36,8 +36,9 @@ function render() {
   list.scrollTop = list.scrollHeight;
 }
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
+async function sendChatMessage(event) {
+  if (event) event.preventDefault();
+  if (form.querySelector('button').disabled) return;
   const content = input.value.trim();
   if (!content) return;
   messages.push({ role: 'user', content });
@@ -57,7 +58,14 @@ form.addEventListener('submit', async (event) => {
     render();
     input.focus();
   }
+}
+
+input.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  sendChatMessage();
 });
+form.addEventListener('submit', sendChatMessage);
 
 clearButton.addEventListener('click', () => { messages = []; render(); input.focus(); });
 
