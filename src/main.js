@@ -7,10 +7,8 @@ let panelWindow = null;
 let chatWindow = null;
 let tray = null;
 let quitRequested = false;
-let reminderTimer = null;
 let dragAnchor = null;
 let dragLastCursor = null;
-let nextReminderAt = Date.now() + 45 * 60 * 1000;
 
 const dataDir = path.join(app.getPath('userData'), 'word-cat');
 const dataFile = path.join(dataDir, 'state.json');
@@ -22,11 +20,8 @@ const defaultCatPersonality = '你是用户桌面上的学习小猫，主要陪�
 
 const defaultState = {
   settings: {
-    intervalMinutes: 45,
-    dailyGoal: 20,
-    reminderStart: '08:00',
-    reminderEnd: '23:00',
-    sound: true,
+    newWordsGoal: 10,
+    reviewWordsGoal: 20,
     stepfunApiKey: '',
     stepfunModel: 'step-3.7-flash',
     stepfunEndpoint: 'https://api.stepfun.com/v1/chat/completions'
@@ -46,22 +41,18 @@ function ensureState() {
     const settings = {
       ...defaultState.settings,
       ...legacySettings,
-      intervalMinutes: legacySettings.intervalMinutes ?? legacySettings.interval_minutes ?? defaultState.settings.intervalMinutes,
-      dailyGoal: legacySettings.dailyGoal ?? legacySettings.daily_goal ?? defaultState.settings.dailyGoal,
-      reminderStart: legacySettings.reminderStart ?? legacySettings.reminder_start ?? defaultState.settings.reminderStart,
-      reminderEnd: legacySettings.reminderEnd ?? legacySettings.reminder_end ?? defaultState.settings.reminderEnd
+      newWordsGoal: legacySettings.newWordsGoal ?? legacySettings.new_words_goal ?? legacySettings.dailyGoal ?? legacySettings.daily_goal ?? defaultState.settings.newWordsGoal,
+      reviewWordsGoal: legacySettings.reviewWordsGoal ?? legacySettings.review_words_goal ?? 0
     };
-    settings.intervalMinutes = clampInteger(settings.intervalMinutes, 5, 480, defaultState.settings.intervalMinutes);
-    settings.reminderStart = normalizeTime(settings.reminderStart, defaultState.settings.reminderStart);
-    settings.reminderEnd = normalizeTime(settings.reminderEnd, defaultState.settings.reminderEnd);
-    settings.sound = settings.sound !== false;
+    settings.newWordsGoal = clampInteger(settings.newWordsGoal, 0, 500, defaultState.settings.newWordsGoal);
+    settings.reviewWordsGoal = clampInteger(settings.reviewWordsGoal, 0, 500, defaultState.settings.reviewWordsGoal);
     settings.stepfunApiKey = typeof settings.stepfunApiKey === 'string' ? settings.stepfunApiKey.trim() : '';
     settings.stepfunModel = typeof settings.stepfunModel === 'string' && settings.stepfunModel.trim() ? settings.stepfunModel.trim() : defaultState.settings.stepfunModel;
     if (settings.stepfunModel === 'step-1-8k' || settings.stepfunModel === 'step-3.5-flash') settings.stepfunModel = defaultState.settings.stepfunModel;
     settings.stepfunEndpoint = normalizeEndpoint(settings.stepfunEndpoint, defaultState.settings.stepfunEndpoint);
     const normalized = {
       settings,
-      records: loaded.records && typeof loaded.records === 'object' ? loaded.records : {}
+      records: normalizeRecords(loaded.records)
     };
     if (sourceFile !== dataFile) saveState(normalized);
     return normalized;
@@ -77,6 +68,20 @@ function clampInteger(value, min, max, fallback) {
 
 function normalizeTime(value, fallback) {
   return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
+}
+
+function normalizeRecord(value) {
+  if (Array.isArray(value)) return { newWords: value.length, reviewWords: 0 };
+  if (!value || typeof value !== 'object') return { newWords: 0, reviewWords: 0 };
+  return {
+    newWords: clampInteger(value.newWords ?? value.new_words, 0, 500, 0),
+    reviewWords: clampInteger(value.reviewWords ?? value.review_words, 0, 500, 0)
+  };
+}
+
+function normalizeRecords(records) {
+  if (!records || typeof records !== 'object') return {};
+  return Object.fromEntries(Object.entries(records).map(([key, value]) => [key, normalizeRecord(value)]));
 }
 
 function normalizeEndpoint(value, fallback) {
@@ -96,16 +101,6 @@ function normalizeEndpoint(value, fallback) {
 function saveState(state) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(dataFile, JSON.stringify(state, null, 2), 'utf8');
-}
-
-function withinReminderWindow(settings) {
-  const now = new Date();
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  const [startHour, startMinute] = settings.reminderStart.split(':').map(Number);
-  const [endHour, endMinute] = settings.reminderEnd.split(':').map(Number);
-  const start = startHour * 60 + startMinute;
-  const end = endHour * 60 + endMinute;
-  return start <= end ? minutes >= start && minutes <= end : minutes >= start || minutes <= end;
 }
 
 function createPetWindow() {
@@ -229,20 +224,6 @@ function sendToPet(channel, payload) {
   if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send(channel, payload);
 }
 
-function remindNow() {
-  sendToPet('reminder', Date.now());
-}
-
-function scheduleReminders() {
-  reminderTimer = setInterval(() => {
-    const state = ensureState();
-    if (Date.now() >= nextReminderAt && withinReminderWindow(state.settings)) {
-      remindNow();
-      nextReminderAt = Date.now() + state.settings.intervalMinutes * 60 * 1000;
-    }
-  }, 30000);
-}
-
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'cat-icon.png'));
   tray = new Tray(icon);
@@ -251,7 +232,6 @@ function createTray() {
     { label: '打开打卡面板', click: createPanelWindow },
     { label: '打开聊天面板', click: createChatWindow },
     { label: '显示桌宠', click: () => petWindow?.show() },
-    { label: '立即提醒', click: remindNow },
     { type: 'separator' },
     { label: '退出', click: () => { quitRequested = true; app.quit(); } }
   ]));
@@ -265,18 +245,15 @@ if (!hasSingleInstanceLock) {
   configureAutoLaunch();
   const loginSettings = process.platform === 'win32' ? app.getLoginItemSettings() : {};
   const launchedAtLogin = process.argv.includes('--autostart') || loginSettings.wasOpenedAtLogin;
-  nextReminderAt = Date.now() + ensureState().settings.intervalMinutes * 60 * 1000;
   createPetWindow();
   if (!launchedAtLogin) createPanelWindow();
   createTray();
-  scheduleReminders();
   });
 }
 
 app.on('window-all-closed', () => {});
 app.on('before-quit', () => {
   quitRequested = true;
-  if (reminderTimer) clearInterval(reminderTimer);
   stopPetDrag();
 });
 
@@ -286,19 +263,15 @@ ipcMain.handle('state:save', (_event, state) => {
   const safeState = {
     settings: {
       ...current.settings,
-      intervalMinutes: clampInteger(state?.settings?.intervalMinutes, 5, 480, current.settings.intervalMinutes),
-      dailyGoal: clampInteger(state?.settings?.dailyGoal, 1, 500, current.settings.dailyGoal),
-      reminderStart: normalizeTime(state?.settings?.reminderStart, current.settings.reminderStart),
-      reminderEnd: normalizeTime(state?.settings?.reminderEnd, current.settings.reminderEnd),
-      sound: state?.settings?.sound !== false,
+      newWordsGoal: clampInteger(state?.settings?.newWordsGoal, 0, 500, current.settings.newWordsGoal),
+      reviewWordsGoal: clampInteger(state?.settings?.reviewWordsGoal, 0, 500, current.settings.reviewWordsGoal),
       stepfunApiKey: typeof state?.settings?.stepfunApiKey === 'string' ? state.settings.stepfunApiKey.trim() : current.settings.stepfunApiKey,
       stepfunModel: typeof state?.settings?.stepfunModel === 'string' && state.settings.stepfunModel.trim() ? state.settings.stepfunModel.trim() : current.settings.stepfunModel,
       stepfunEndpoint: normalizeEndpoint(state?.settings?.stepfunEndpoint, current.settings.stepfunEndpoint)
     },
-    records: state?.records && typeof state.records === 'object' ? state.records : current.records
+    records: normalizeRecords(state?.records && typeof state.records === 'object' ? state.records : current.records)
   };
   saveState(safeState);
-  nextReminderAt = Date.now() + safeState.settings.intervalMinutes * 60 * 1000;
   return true;
 });
 ipcMain.handle('panel:show', createPanelWindow);
@@ -311,13 +284,11 @@ ipcMain.handle('cat:personality', () => {
     return defaultCatPersonality;
   }
 });
-ipcMain.on('pet:reminder', remindNow);
 ipcMain.on('pet:context-menu', () => {
   if (!petWindow || petWindow.isDestroyed()) return;
   Menu.buildFromTemplate([
     { label: '打开打卡面板', click: createPanelWindow },
     { label: '打开聊天面板', click: createChatWindow },
-    { label: '立即提醒', click: remindNow },
     { type: 'separator' },
     { label: '最小化桌宠', click: () => petWindow.hide() },
     { label: '退出', click: () => { quitRequested = true; app.quit(); } }

@@ -9,20 +9,20 @@ let messages = [];
 
 function dateKey(date = new Date()) { return date.toLocaleDateString('sv-SE'); }
 function keyFromOffset(offset) { const date = new Date(); date.setDate(date.getDate() - offset); return dateKey(date); }
-function recordsFor(key = dateKey()) { return Array.isArray(state.records[key]) ? state.records[key] : []; }
+function recordsFor(key = dateKey()) { const value = state.records[key]; if (Array.isArray(value)) return { newWords: value.length, reviewWords: 0 }; return value && typeof value === 'object' ? value : { newWords: 0, reviewWords: 0 }; }
 function streak() {
   let value = 0;
   for (let offset = 0; offset < 3650; offset += 1) {
-    if (recordsFor(keyFromOffset(offset)).length >= state.settings.dailyGoal) value += 1;
+    const record = recordsFor(keyFromOffset(offset));
+    if (record.newWords >= state.settings.newWordsGoal && record.reviewWords >= state.settings.reviewWordsGoal) value += 1;
     else if (offset > 0) break;
   }
   return value;
 }
 function learningContext() {
-  const today = recordsFor().length;
-  const goal = state.settings.dailyGoal;
-  const total = Object.values(state.records).reduce((sum, records) => sum + (Array.isArray(records) ? records.length : 0), 0);
-  return `用户单词学习数据（仅用于准确反馈，不要猜测或修改）：今天已打卡 ${today} 个，目标 ${goal} 个，还差 ${Math.max(0, goal - today)} 个；连续达标 ${streak()} 天；累计 ${total} 个。`;
+  const today = recordsFor();
+  const total = Object.values(state.records).reduce((sum, value) => { const record = Array.isArray(value) ? { newWords: value.length, reviewWords: 0 } : value; return sum + (record?.newWords || 0) + (record?.reviewWords || 0); }, 0);
+  return `用户单词学习数据（仅用于准确反馈，不要猜测或修改）：今天新词 ${today.newWords} 个（目标 ${state.settings.newWordsGoal}），复习 ${today.reviewWords} 个（目标 ${state.settings.reviewWordsGoal}）；连续达标 ${streak()} 天；累计学习 ${total} 个。`;
 }
 function render() {
   if (!messages.length) { list.innerHTML = '<p class="empty">说点什么吧，喵。</p>'; return; }

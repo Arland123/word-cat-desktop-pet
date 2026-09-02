@@ -7,8 +7,6 @@ contextBridge.exposeInMainWorld('catApi', {
   showChat: () => ipcRenderer.invoke('chat:show'),
   loadCatPersonality: () => ipcRenderer.invoke('cat:personality'),
   sendChat: (payload) => ipcRenderer.invoke('chat:send', payload),
-  onReminder: (listener) => ipcRenderer.on('reminder', (_event, payload) => listener(payload)),
-  triggerReminder: () => ipcRenderer.send('pet:reminder'),
   showPetMenu: () => ipcRenderer.send('pet:context-menu'),
   getPetPosition: () => ipcRenderer.invoke('pet:get-position'),
   movePet: (position) => ipcRenderer.send('pet:move', position),

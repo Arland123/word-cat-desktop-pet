@@ -1,16 +1,17 @@
 const api = window.catApi;
 const byId = (id) => document.getElementById(id);
 const elements = {
-  streakLine: byId('streak-line'), today: byId('stat-today'), goalStat: byId('stat-goal'), streak: byId('stat-streak'), total: byId('stat-total'),
-  todayDate: byId('today-date'), progressCount: byId('progress-count'), progressLabel: byId('progress-label'), progressFill: byId('progress-fill'),
-  checkinButton: byId('checkin-button'), undoButton: byId('undo-button'), remindButton: byId('remind-button'), history: byId('history'), toast: byId('toast'),
-  settingsForm: byId('settings-form'), goal: byId('goal'), interval: byId('interval'), startTime: byId('start-time'), endTime: byId('end-time'), sound: byId('sound'),
+  streakLine: byId('streak-line'), newWords: byId('stat-new'), reviewWords: byId('stat-review'), streak: byId('stat-streak'), total: byId('stat-total'),
+  todayDate: byId('today-date'), newProgressCount: byId('new-progress-count'), newProgressLabel: byId('new-progress-label'), newProgressFill: byId('new-progress-fill'), reviewProgressCount: byId('review-progress-count'), reviewProgressLabel: byId('review-progress-label'), reviewProgressFill: byId('review-progress-fill'),
+  newWordButton: byId('new-word-button'), reviewWordButton: byId('review-word-button'), undoButton: byId('undo-button'), history: byId('history'), toast: byId('toast'),
+  settingsForm: byId('settings-form'), newGoal: byId('new-goal'), reviewGoal: byId('review-goal'),
   apiForm: byId('api-form'), apiKey: byId('api-key'), model: byId('model'), endpoint: byId('endpoint'),
   chatList: byId('chat-list'), chatForm: byId('chat-form'), chatInput: byId('chat-input'), clearChat: byId('clear-chat')
 };
 const recordModal = byId('record-modal');
 const recordTitle = byId('record-title');
-const recordCount = byId('record-count');
+const recordNewCount = byId('record-new-count');
+const recordReviewCount = byId('record-review-count');
 let state = null;
 let chatMessages = [];
 let catPersonality = '你是用户桌面上的学习小猫，主要陪伴用户完成单词打卡。请用简洁、温暖、自然的中文回复，适时提醒用户坚持单词学习；不要虚构打卡记录，也不要泄露敏感信息。';
@@ -28,7 +29,9 @@ function keyFromOffset(offset) {
 }
 
 function recordsFor(key = dateKey()) {
-  return Array.isArray(state.records[key]) ? state.records[key] : [];
+  const value = state.records[key];
+  if (Array.isArray(value)) return { newWords: value.length, reviewWords: 0 };
+  return value && typeof value === 'object' ? value : { newWords: 0, reviewWords: 0 };
 }
 
 function toast(message) {
@@ -41,8 +44,8 @@ function toast(message) {
 function calculateStreak() {
   let streak = 0;
   for (let offset = 0; offset < 3650; offset += 1) {
-    const count = recordsFor(keyFromOffset(offset)).length;
-    if (count >= state.settings.dailyGoal) streak += 1;
+    const record = recordsFor(keyFromOffset(offset));
+    if (record.newWords >= state.settings.newWordsGoal && record.reviewWords >= state.settings.reviewWordsGoal) streak += 1;
     else if (offset === 0) continue;
     else break;
   }
@@ -53,16 +56,17 @@ function renderHistory() {
   elements.history.innerHTML = '';
   for (let offset = 13; offset >= 0; offset -= 1) {
     const key = keyFromOffset(offset);
-    const count = recordsFor(key).length;
+    const record = recordsFor(key);
+    const count = record.newWords + record.reviewWords;
     const cell = document.createElement('button');
     cell.type = 'button';
     cell.className = `day${count ? ' done' : ''}${offset === 0 ? ' today' : ''}`;
-    cell.innerHTML = `<strong>${count}</strong><small>${key.slice(5)}</small>`;
+    cell.innerHTML = `<strong>新 ${record.newWords} · 复 ${record.reviewWords}</strong><small>${key.slice(5)}</small>`;
     cell.addEventListener('click', async () => {
-      const value = await showRecordPrompt(`补录 ${key} 打卡数量`, count);
-      if (value === null || !Number.isInteger(value) || value < 0 || value > 500) return;
-      if (!value) delete state.records[key];
-      else state.records[key] = Array.from({ length: value }, (_, index) => `manual-${key}-${index}`);
+      const value = await showRecordPrompt(`补录 ${key} 学习数量`, record);
+      if (value === null || ![value.newWords, value.reviewWords].every((number) => Number.isInteger(number) && number >= 0 && number <= 500)) return;
+      if (!value.newWords && !value.reviewWords) delete state.records[key];
+      else state.records[key] = value;
       await api.saveState(state);
       render();
       toast('补录已保存');
@@ -72,32 +76,39 @@ function renderHistory() {
 }
 
 function render() {
-  const today = recordsFor().length;
-  const goal = state.settings.dailyGoal;
+  const today = recordsFor();
+  const newGoal = state.settings.newWordsGoal;
+  const reviewGoal = state.settings.reviewWordsGoal;
   const streak = calculateStreak();
-  const total = Object.values(state.records).reduce((sum, records) => sum + (Array.isArray(records) ? records.length : 0), 0);
-  const remaining = Math.max(0, goal - today);
-  const percent = Math.min(100, Math.round((today / goal) * 100));
-  elements.today.textContent = today;
-  elements.goalStat.textContent = goal;
+  const total = Object.values(state.records).reduce((sum, value) => { const record = Array.isArray(value) ? { newWords: value.length, reviewWords: 0 } : value; return sum + (record?.newWords || 0) + (record?.reviewWords || 0); }, 0);
+  const newRemaining = Math.max(0, newGoal - today.newWords);
+  const reviewRemaining = Math.max(0, reviewGoal - today.reviewWords);
+  elements.newWords.textContent = today.newWords;
+  elements.reviewWords.textContent = today.reviewWords;
   elements.streak.textContent = streak;
   elements.total.textContent = total;
   elements.todayDate.textContent = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' });
-  elements.progressCount.textContent = `${today} / ${goal}`;
-  elements.progressLabel.textContent = remaining ? `还差 ${remaining} 个单词` : '今日目标已完成';
-  elements.progressFill.style.transform = `scaleX(${percent / 100})`;
-  elements.progressFill.parentElement.setAttribute('aria-valuemax', goal);
-  elements.progressFill.parentElement.setAttribute('aria-valuenow', today);
-  elements.streakLine.textContent = today >= goal ? `今天已达标，连续打卡 ${streak} 天` : `今天已完成 ${today} 个单词`;
-  elements.undoButton.disabled = today === 0;
+  elements.newProgressCount.textContent = `${today.newWords} / ${newGoal}`;
+  elements.newProgressLabel.textContent = newRemaining ? `还差 ${newRemaining} 个新词` : '新词目标已完成';
+  elements.reviewProgressCount.textContent = `${today.reviewWords} / ${reviewGoal}`;
+  elements.reviewProgressLabel.textContent = reviewRemaining ? `还差 ${reviewRemaining} 个复习词` : '复习目标已完成';
+  elements.newProgressFill.style.transform = `scaleX(${newGoal ? Math.min(1, today.newWords / newGoal) : 1})`;
+  elements.reviewProgressFill.style.transform = `scaleX(${reviewGoal ? Math.min(1, today.reviewWords / reviewGoal) : 1})`;
+  elements.newProgressFill.parentElement.setAttribute('aria-valuemax', newGoal);
+  elements.newProgressFill.parentElement.setAttribute('aria-valuenow', today.newWords);
+  elements.reviewProgressFill.parentElement.setAttribute('aria-valuemax', reviewGoal);
+  elements.reviewProgressFill.parentElement.setAttribute('aria-valuenow', today.reviewWords);
+  elements.streakLine.textContent = !newRemaining && !reviewRemaining ? `今天新词和复习都达标，连续打卡 ${streak} 天` : `今天已完成新词 ${today.newWords} 个、复习 ${today.reviewWords} 个`;
+  elements.undoButton.disabled = today.newWords + today.reviewWords === 0;
   renderHistory();
 }
 
 function showRecordPrompt(title, value) {
   recordTitle.textContent = title;
-  recordCount.value = value;
+  recordNewCount.value = value.newWords;
+  recordReviewCount.value = value.reviewWords;
   recordModal.classList.remove('hidden');
-  setTimeout(() => { recordCount.focus(); recordCount.select(); }, 30);
+  setTimeout(() => { recordNewCount.focus(); recordNewCount.select(); }, 30);
   return new Promise((resolve) => { modalResolver = resolve; });
 }
 
@@ -108,48 +119,47 @@ function closeRecordPrompt(value) {
 }
 
 byId('record-cancel').addEventListener('click', () => closeRecordPrompt(null));
-byId('record-save').addEventListener('click', () => closeRecordPrompt(Number(recordCount.value)));
+byId('record-save').addEventListener('click', () => closeRecordPrompt({ newWords: Number(recordNewCount.value), reviewWords: Number(recordReviewCount.value) }));
 recordModal.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeRecordPrompt(null);
-  if (event.key === 'Enter') closeRecordPrompt(Number(recordCount.value));
+  if (event.key === 'Enter') closeRecordPrompt({ newWords: Number(recordNewCount.value), reviewWords: Number(recordReviewCount.value) });
 });
 
-elements.checkinButton.addEventListener('click', async () => {
+async function addStudyRecord(type) {
   const key = dateKey();
-  const records = recordsFor(key);
-  records.push(`checkin-${Date.now()}-${crypto.randomUUID()}`);
-  state.records[key] = records;
+  const record = { ...recordsFor(key) };
+  record[type] += 1;
+  state.records[key] = record;
   await api.saveState(state);
   render();
-  toast(records.length >= state.settings.dailyGoal ? '今日目标已完成' : '已记录一次打卡');
-});
+  toast(type === 'newWords' ? '已记录一个新词' : '已记录一次复习');
+}
+
+elements.newWordButton.addEventListener('click', () => addStudyRecord('newWords'));
+elements.reviewWordButton.addEventListener('click', () => addStudyRecord('reviewWords'));
 
 elements.undoButton.addEventListener('click', async () => {
   const key = dateKey();
-  const records = recordsFor(key);
-  if (!records.length) return;
-  records.pop();
-  if (records.length) state.records[key] = records;
+  const record = { ...recordsFor(key) };
+  if (record.reviewWords > 0) record.reviewWords -= 1;
+  else if (record.newWords > 0) record.newWords -= 1;
+  else return;
+  if (record.newWords || record.reviewWords) state.records[key] = record;
   else delete state.records[key];
   await api.saveState(state);
   render();
   toast('已撤销一次打卡');
 });
 
-elements.remindButton.addEventListener('click', () => {
-  api.triggerReminder();
-  toast('已提醒桌宠');
-});
-
 elements.settingsForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const dailyGoal = Number(elements.goal.value);
-  const intervalMinutes = Number(elements.interval.value);
-  if (!Number.isInteger(dailyGoal) || dailyGoal < 1 || dailyGoal > 500 || !Number.isInteger(intervalMinutes) || intervalMinutes < 5 || intervalMinutes > 480) {
+  const newWordsGoal = Number(elements.newGoal.value);
+  const reviewWordsGoal = Number(elements.reviewGoal.value);
+  if (![newWordsGoal, reviewWordsGoal].every((value) => Number.isInteger(value) && value >= 0 && value <= 500) || (newWordsGoal === 0 && reviewWordsGoal === 0)) {
     toast('请检查打卡设置');
     return;
   }
-  state.settings = { ...state.settings, dailyGoal, intervalMinutes, reminderStart: elements.startTime.value, reminderEnd: elements.endTime.value, sound: elements.sound.checked };
+  state.settings = { ...state.settings, newWordsGoal, reviewWordsGoal };
   await api.saveState(state);
   render();
   toast('打卡设置已保存');
@@ -160,18 +170,19 @@ function apiSettings() {
 }
 
 function learningContext() {
-  const today = recordsFor().length;
-  const goal = state.settings.dailyGoal;
-  const remaining = Math.max(0, goal - today);
+  const today = recordsFor();
+  const newGoal = state.settings.newWordsGoal;
+  const reviewGoal = state.settings.reviewWordsGoal;
   const recent = [];
   for (let offset = 0; offset < 7; offset += 1) {
     const key = keyFromOffset(offset);
-    recent.push(`${key}: ${recordsFor(key).length} 个`);
+    const record = recordsFor(key);
+    recent.push(`${key}: 新词 ${record.newWords} 个、复习 ${record.reviewWords} 个`);
   }
   return [
     '这是用户当前的单词学习数据，请据此给出准确反馈，不要猜测或修改数据：',
-    `今天（${dateKey()}）已打卡 ${today} 个，今日目标 ${goal} 个，${remaining ? `还差 ${remaining} 个` : '今日目标已完成'}。`,
-    `连续达标 ${calculateStreak()} 天，累计打卡 ${Object.values(state.records).reduce((sum, records) => sum + (Array.isArray(records) ? records.length : 0), 0)} 个。`,
+    `今天（${dateKey()}）已学习新词 ${today.newWords} 个（目标 ${newGoal} 个），复习 ${today.reviewWords} 个（目标 ${reviewGoal} 个）。`,
+    `连续达标 ${calculateStreak()} 天，累计学习 ${Object.values(state.records).reduce((sum, value) => { const record = Array.isArray(value) ? { newWords: value.length, reviewWords: 0 } : value; return sum + (record?.newWords || 0) + (record?.reviewWords || 0); }, 0)} 个。`,
     `最近 7 天：${recent.join('；')}。`
   ].join('\n');
 }
@@ -234,12 +245,10 @@ elements.clearChat.addEventListener('click', () => { chatMessages = []; renderCh
 (async () => {
   state = await api.loadState();
   state.records ||= {};
-  state.settings.dailyGoal ||= 20;
-  elements.goal.value = state.settings.dailyGoal;
-  elements.interval.value = state.settings.intervalMinutes;
-  elements.startTime.value = state.settings.reminderStart;
-  elements.endTime.value = state.settings.reminderEnd;
-  elements.sound.checked = state.settings.sound;
+  state.settings.newWordsGoal ??= state.settings.dailyGoal ?? 10;
+  state.settings.reviewWordsGoal ??= 20;
+  elements.newGoal.value = state.settings.newWordsGoal;
+  elements.reviewGoal.value = state.settings.reviewWordsGoal;
   elements.apiKey.value = state.settings.stepfunApiKey || '';
   elements.model.value = state.settings.stepfunModel || 'step-3.7-flash';
   elements.endpoint.value = state.settings.stepfunEndpoint || 'https://api.stepfun.com/v1/chat/completions';

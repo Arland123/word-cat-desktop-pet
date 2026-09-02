@@ -45,24 +45,19 @@ function todayKey() {
   return new Date().toLocaleDateString('sv-SE');
 }
 
-function todayCount() {
-  return state?.records?.[todayKey()]?.length ?? 0;
+function todayRecord() {
+  const value = state?.records?.[todayKey()];
+  if (Array.isArray(value)) return { newWords: value.length, reviewWords: 0 };
+  return value && typeof value === 'object' ? value : { newWords: 0, reviewWords: 0 };
 }
 
 function progressMessage() {
-  const count = todayCount();
-  const goal = state.settings.dailyGoal;
-  const remaining = Math.max(0, goal - count);
-  if (count >= goal) return { text: `今天已达标！完成 ${count} 个`, mood: 'happy' };
-  if (!count) return { text: '今天还没打卡，先学一个吧！', mood: 'remind' };
-  if (remaining <= 3) return { text: `快达标啦，还差 ${remaining} 个！`, mood: 'happy' };
-  return { text: `已打卡 ${count} 个，还差 ${remaining} 个`, mood: 'remind' };
-}
-
-function reminderMessage() {
-  const remaining = Math.max(0, state.settings.dailyGoal - todayCount());
-  if (!remaining) return '今天已达标，真棒！';
-  return `该背单词啦！还差 ${remaining} 个`;
+  const record = todayRecord();
+  const newRemaining = Math.max(0, state.settings.newWordsGoal - record.newWords);
+  const reviewRemaining = Math.max(0, state.settings.reviewWordsGoal - record.reviewWords);
+  if (!newRemaining && !reviewRemaining) return { text: `今天新词 ${record.newWords} 个、复习 ${record.reviewWords} 个，目标都完成啦！`, mood: 'happy' };
+  if (!record.newWords && !record.reviewWords) return { text: '今天还没有学习记录，先记一个新词吧！', mood: 'remind' };
+  return { text: `今天新词 ${record.newWords} 个、复习 ${record.reviewWords} 个；还差新词 ${newRemaining}、复习 ${reviewRemaining}`, mood: newRemaining + reviewRemaining <= 3 ? 'happy' : 'remind' };
 }
 
 cat.addEventListener('pointerdown', (event) => {
@@ -120,28 +115,6 @@ document.addEventListener('contextmenu', (event) => {
   if (!hitTest(event)) return;
   event.preventDefault();
   window.catApi.showPetMenu();
-});
-
-window.catApi.onReminder(async () => {
-  state = await window.catApi.loadState();
-  showBubble(reminderMessage(), 'remind');
-  if (state.settings.sound) {
-    try {
-      const audioContext = new AudioContext();
-      await audioContext.resume();
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      oscillator.frequency.value = 880;
-      gain.gain.setValueAtTime(0.08, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.25);
-      oscillator.connect(gain).connect(audioContext.destination);
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.25);
-      oscillator.addEventListener('ended', () => audioContext.close());
-    } catch {
-      // Audio is optional; the visual reminder remains available.
-    }
-  }
 });
 
 (async () => {
