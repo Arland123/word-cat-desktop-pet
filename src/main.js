@@ -42,7 +42,7 @@ function ensureState() {
       ...defaultState.settings,
       ...legacySettings,
       newWordsGoal: legacySettings.newWordsGoal ?? legacySettings.new_words_goal ?? legacySettings.dailyGoal ?? legacySettings.daily_goal ?? defaultState.settings.newWordsGoal,
-      reviewWordsGoal: legacySettings.reviewWordsGoal ?? legacySettings.review_words_goal ?? 0
+      reviewWordsGoal: legacySettings.reviewWordsGoal ?? legacySettings.review_words_goal ?? defaultState.settings.reviewWordsGoal
     };
     settings.newWordsGoal = clampInteger(settings.newWordsGoal, 0, 500, defaultState.settings.newWordsGoal);
     settings.reviewWordsGoal = clampInteger(settings.reviewWordsGoal, 0, 500, defaultState.settings.reviewWordsGoal);
