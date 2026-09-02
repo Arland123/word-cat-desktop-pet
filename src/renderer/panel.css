@@ -76,13 +76,18 @@ label.check input { width: auto; }
 .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 .history { margin-top: 14px; }
-.history-grid { display: grid; grid-template-columns: repeat(14, minmax(46px, 1fr)); gap: 7px; overflow-x: auto; padding: 1px; }
-.day { min-width: 46px; height: 58px; display: grid; place-content: center; gap: 3px; padding: 4px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: white; }
-.day:hover { background: #f7f9fb; }
-.day strong { color: var(--blue); font-size: 15px; }
-.day small { color: var(--muted); font-size: 9px; }
-.day.done { border-color: #a9cfbc; background: var(--green-soft); }
-.day.today { outline: 2px solid var(--gold); outline-offset: -2px; }
+.history .card-head { margin-bottom: 14px; }
+.history-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; padding: 2px; }
+.day { min-width: 72px; height: 92px; display: grid; grid-template-rows: auto 1fr auto; align-items: center; gap: 7px; padding: 9px 7px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fff; text-align: left; transition: border-color .16s, background .16s, transform .16s; }
+.day:hover { border-color: #9fb5cb; background: #f8fbfd; transform: translateY(-1px); }
+.day-date { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.day-metrics { display: grid; gap: 4px; }
+.day-metrics b { display: flex; justify-content: space-between; align-items: baseline; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.day-metrics em { color: var(--blue); font-size: 17px; font-style: normal; font-weight: 800; line-height: 1; }
+.day-status { color: #8a96a5; font-size: 10px; white-space: nowrap; }
+.day.done { border-color: #9bcbb4; background: #f0f8f3; }
+.day.done .day-status { color: var(--green); font-weight: 700; }
+.day.today { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(181, 121, 34, .2); }
 .empty { align-self: center; justify-self: center; color: #8b95a4; text-align: center; font-size: 12px; }
 
 #toast { position: fixed; left: 50%; bottom: 22px; translate: -50%; padding: 9px 15px; border-radius: 6px; color: white; background: #27364a; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 30; }
@@ -96,5 +101,5 @@ label.check input { width: auto; }
 @media (max-width: 760px) {
   .workspace { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, 1fr); }
-  .history-grid { grid-template-columns: repeat(7, minmax(52px, 1fr)); }
+  .history-grid { grid-template-columns: repeat(4, minmax(72px, 1fr)); }
 }

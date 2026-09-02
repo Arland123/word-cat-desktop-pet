@@ -61,7 +61,8 @@ function renderHistory() {
     const cell = document.createElement('button');
     cell.type = 'button';
     cell.className = `day${count ? ' done' : ''}${offset === 0 ? ' today' : ''}`;
-    cell.innerHTML = `<strong>新 ${record.newWords} · 复 ${record.reviewWords}</strong><small>${key.slice(5)}</small>`;
+    const complete = record.newWords >= state.settings.newWordsGoal && record.reviewWords >= state.settings.reviewWordsGoal;
+    cell.innerHTML = `<span class="day-date">${key.slice(5)}</span><span class="day-metrics"><b>新词 <em>${record.newWords}</em></b><b>复习 <em>${record.reviewWords}</em></b></span><span class="day-status">${complete ? '已完成' : count ? '进行中' : '未开始'}</span>`;
     cell.addEventListener('click', async () => {
       const value = await showRecordPrompt(`补录 ${key} 学习数量`, record);
       if (value === null || ![value.newWords, value.reviewWords].every((number) => Number.isInteger(number) && number >= 0 && number <= 500)) return;
