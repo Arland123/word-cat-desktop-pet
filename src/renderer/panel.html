@@ -13,6 +13,7 @@
         <h1>单词打卡</h1>
         <p id="streak-line">正在载入今天的进度…</p>
       </div>
+      <button id="refresh-button" class="ghost refresh-button" type="button" title="重新读取最新数据">刷新</button>
     </header>
 
     <section class="stats" aria-label="学习统计">
@@ -32,13 +33,14 @@
           <div class="checkin-actions">
             <button id="new-word-button" type="button">记录一个新词</button>
             <button id="review-word-button" type="button">记录一次复习</button>
-            <button id="undo-button" class="ghost" type="button">撤销一次</button>
+            <button id="undo-new-button" class="ghost undo-button" type="button" title="撤销一个最新记录的新词">撤销新词</button>
+            <button id="undo-review-button" class="ghost undo-button" type="button" title="撤销一个最新记录的复习">撤销复习</button>
           </div>
         </section>
 
         <section class="card chat-card">
           <div class="card-head"><h2>和猫咪聊聊</h2><button id="clear-chat" class="icon-command" type="button" title="清空对话" aria-label="清空对话">×</button></div>
-          <div id="chat-list" class="chat-list"><p class="empty">输入一句话，和猫咪聊聊。</p></div>
+          <div id="chat-list" class="chat-list"><p class="empty">可直接说“记 3 个新词”或“撤销一次打卡”。</p></div>
           <form id="chat-form" class="chat-form">
             <textarea id="chat-input" rows="2" placeholder="输入消息，Enter 发送，Shift+Enter 换行" required></textarea>
             <button type="submit">发送</button>
@@ -61,7 +63,7 @@
           <form id="api-form" class="settings">
             <label>API Key<input id="api-key" type="password" placeholder="API Key" autocomplete="off"></label>
             <label>模型<input id="model" value="step-3.7-flash" autocomplete="off"></label>
-            <label>接口地址<input id="endpoint" type="url" autocomplete="off"></label>
+            <label>接口地址<input id="endpoint" type="url" placeholder="https://api.stepfun.com/step_plan/v1/chat/completions" autocomplete="off"></label>
             <button type="submit">保存 API 设置</button>
           </form>
         </section>
@@ -83,6 +85,7 @@
       <div class="modal-actions"><button id="record-cancel" class="ghost" type="button">取消</button><button id="record-save" type="button">保存</button></div>
     </div>
   </div>
+  <script src="chat-actions.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

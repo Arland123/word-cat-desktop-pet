@@ -3,6 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('catApi', {
   loadState: () => ipcRenderer.invoke('state:load'),
   saveState: (state) => ipcRenderer.invoke('state:save', state),
+  recordStudy: (counts) => ipcRenderer.invoke('study:record', counts),
+  setStudy: (counts) => ipcRenderer.invoke('study:set', counts),
+  undoStudy: (date) => ipcRenderer.invoke('study:undo', date),
+  undoNewWord: (date) => ipcRenderer.invoke('study:undo-new', date),
+  undoReviewWord: (date) => ipcRenderer.invoke('study:undo-review', date),
   showPanel: () => ipcRenderer.invoke('panel:show'),
   showChat: () => ipcRenderer.invoke('chat:show'),
   loadCatPersonality: () => ipcRenderer.invoke('cat:personality'),

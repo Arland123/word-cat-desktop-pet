@@ -34,8 +34,21 @@ npm start
 
 ## StepFun 陪聊
 
-在面板右侧“StepFun 设置”填写 API Key、模型和接口地址，默认地址为 `https://api.stepfun.com/v1/chat/completions`，默认模型为 `step-3.7-flash`。也可以在启动前设置 `STEPFUN_API_KEY` 环境变量。API 请求由 Electron 主进程发出，聊天记录仅保存在当前会话内。
+在面板右侧“StepFun 设置”填写 API Key、模型和接口地址，默认地址为 `https://api.stepfun.com/step_plan/v1/chat/completions`，默认模型为 `step-3.7-flash`。也可以填写基础地址 `https://api.stepfun.com/step_plan/v1`，程序会自动补全 `/chat/completions`。也可以在启动前设置 `STEPFUN_API_KEY` 环境变量。API 请求由 Electron 主进程发出，聊天记录仅保存在当前会话内。
 
 小猫的聊天人格设定保存在项目根目录的 `cat-personality.md`。直接编辑该文件即可调整身份、语气和提醒规则；保存后发送下一条消息即可生效，不需要修改 JavaScript。
 
 每次聊天都会同时传入最新的打卡数据（今日数量、每日目标、剩余数量、连续达标天数、累计数量和近 7 天记录），因此小猫可以基于真实进度进行反馈。
+
+### 用聊天指令操作打卡
+
+聊天框会先让 StepFun 判断你的自然语言意图，再由本地程序校验并执行打卡操作：
+
+- `记 3 个新词`、`今天背了五个新词`
+- `复习 5 个词`、`新词 3 个，复习 5 个`
+- `撤销一次打卡`
+- `把今天复习词改成 20 个`
+- `打开打卡面板`、`打开聊天面板`
+- 记录历史日期时可说 `前天复习 20 个词`、`记录 2026年9月1日的新词 3 个`
+
+指令执行后会立即保存到指定日期并刷新面板；普通聊天不会因为提到“新词”而自动修改数据。执行这些指令需要已配置 StepFun API Key。

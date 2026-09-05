@@ -3,7 +3,8 @@ const byId = (id) => document.getElementById(id);
 const elements = {
   streakLine: byId('streak-line'), newWords: byId('stat-new'), reviewWords: byId('stat-review'), streak: byId('stat-streak'), total: byId('stat-total'),
   todayDate: byId('today-date'), newProgressCount: byId('new-progress-count'), newProgressLabel: byId('new-progress-label'), newProgressFill: byId('new-progress-fill'), reviewProgressCount: byId('review-progress-count'), reviewProgressLabel: byId('review-progress-label'), reviewProgressFill: byId('review-progress-fill'),
-  newWordButton: byId('new-word-button'), reviewWordButton: byId('review-word-button'), undoButton: byId('undo-button'), history: byId('history'), toast: byId('toast'),
+  newWordButton: byId('new-word-button'), reviewWordButton: byId('review-word-button'), undoNewButton: byId('undo-new-button'), undoReviewButton: byId('undo-review-button'), history: byId('history'), toast: byId('toast'),
+  refreshButton: byId('refresh-button'),
   settingsForm: byId('settings-form'), newGoal: byId('new-goal'), reviewGoal: byId('review-goal'),
   apiForm: byId('api-form'), apiKey: byId('api-key'), model: byId('model'), endpoint: byId('endpoint'),
   chatList: byId('chat-list'), chatForm: byId('chat-form'), chatInput: byId('chat-input'), clearChat: byId('clear-chat')
@@ -17,6 +18,8 @@ let chatMessages = [];
 let catPersonality = '你是用户桌面上的学习小猫，主要陪伴用户完成单词打卡。请用简洁、温暖、自然的中文回复，适时提醒用户坚持单词学习；不要虚构打卡记录，也不要泄露敏感信息。';
 let toastTimer = 0;
 let modalResolver = null;
+let lastDateKey = dateKey();
+let refreshInFlight = null;
 
 function dateKey(date = new Date()) {
   return date.toLocaleDateString('sv-SE');
@@ -39,6 +42,25 @@ function toast(message) {
   elements.toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => elements.toast.classList.remove('show'), 2200);
+}
+
+async function refreshState(showToast = false) {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = api.loadState().then((nextState) => {
+    state = nextState || {};
+    state.settings ||= {};
+    state.records ||= {};
+    state.settings.newWordsGoal ??= state.settings.dailyGoal ?? 10;
+    state.settings.reviewWordsGoal ??= 20;
+    const today = dateKey();
+    const crossedDay = today !== lastDateKey;
+    lastDateKey = today;
+    render();
+    if (showToast) toast(crossedDay ? '日期已更新' : '数据已刷新');
+  }).catch(() => {
+    if (showToast) toast('刷新失败，请稍后重试');
+  }).finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
 }
 
 function calculateStreak() {
@@ -68,6 +90,7 @@ function renderHistory() {
       if (value === null || ![value.newWords, value.reviewWords].every((number) => Number.isInteger(number) && number >= 0 && number <= 500)) return;
       if (!value.newWords && !value.reviewWords) delete state.records[key];
       else state.records[key] = value;
+      if (state.studyEvents) delete state.studyEvents[key];
       await api.saveState(state);
       render();
       toast('补录已保存');
@@ -100,7 +123,8 @@ function render() {
   elements.reviewProgressFill.parentElement.setAttribute('aria-valuemax', reviewGoal);
   elements.reviewProgressFill.parentElement.setAttribute('aria-valuenow', today.reviewWords);
   elements.streakLine.textContent = !newRemaining && !reviewRemaining ? `今天新词和复习都达标，连续打卡 ${streak} 天` : `今天已完成新词 ${today.newWords} 个、复习 ${today.reviewWords} 个`;
-  elements.undoButton.disabled = today.newWords + today.reviewWords === 0;
+  elements.undoNewButton.disabled = today.newWords === 0;
+  elements.undoReviewButton.disabled = today.reviewWords === 0;
   renderHistory();
 }
 
@@ -128,10 +152,7 @@ recordModal.addEventListener('keydown', (event) => {
 
 async function addStudyRecord(type) {
   const key = dateKey();
-  const record = { ...recordsFor(key) };
-  record[type] += 1;
-  state.records[key] = record;
-  await api.saveState(state);
+  state = await api.recordStudy({ newWords: type === 'newWords' ? 1 : 0, reviewWords: type === 'reviewWords' ? 1 : 0, date: key });
   render();
   toast(type === 'newWords' ? '已记录一个新词' : '已记录一次复习');
 }
@@ -139,17 +160,18 @@ async function addStudyRecord(type) {
 elements.newWordButton.addEventListener('click', () => addStudyRecord('newWords'));
 elements.reviewWordButton.addEventListener('click', () => addStudyRecord('reviewWords'));
 
-elements.undoButton.addEventListener('click', async () => {
+elements.undoNewButton.addEventListener('click', async () => {
   const key = dateKey();
-  const record = { ...recordsFor(key) };
-  if (record.reviewWords > 0) record.reviewWords -= 1;
-  else if (record.newWords > 0) record.newWords -= 1;
-  else return;
-  if (record.newWords || record.reviewWords) state.records[key] = record;
-  else delete state.records[key];
-  await api.saveState(state);
+  state = await api.undoNewWord(key);
   render();
-  toast('已撤销一次打卡');
+  toast('已撤销一个新词');
+});
+
+elements.undoReviewButton.addEventListener('click', async () => {
+  const key = dateKey();
+  state = await api.undoReviewWord(key);
+  render();
+  toast('已撤销一次复习');
 });
 
 elements.settingsForm.addEventListener('submit', async (event) => {
@@ -224,15 +246,18 @@ async function sendChatMessage(event) {
   try {
     state = await api.loadState();
     catPersonality = await api.loadCatPersonality();
-    const reply = await api.sendChat({
+    const raw = await api.sendChat({
       messages: [
         { role: 'system', content: catPersonality },
         { role: 'system', content: learningContext() },
+        { role: 'system', content: window.chatActions.modelProtocol() },
         ...chatMessages
       ],
       settings: apiSettings()
     });
-    chatMessages.push({ role: 'assistant', content: reply });
+    const result = await window.chatActions.handleModelResponse(raw, api);
+    if (result.state) state = result.state;
+    chatMessages.push({ role: 'assistant', content: result.reply });
   } catch (error) {
     chatMessages.push({ role: 'assistant', content: `暂时没连上 StepFun：${error.message}` });
   } finally {
@@ -250,17 +275,22 @@ elements.chatInput.addEventListener('keydown', (event) => {
 elements.chatForm.addEventListener('submit', sendChatMessage);
 
 elements.clearChat.addEventListener('click', () => { chatMessages = []; renderChat(); });
+elements.refreshButton.addEventListener('click', () => refreshState(true));
+window.addEventListener('focus', () => refreshState());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshState();
+});
+setInterval(() => {
+  if (dateKey() !== lastDateKey) refreshState();
+}, 30000);
 
 (async () => {
-  state = await api.loadState();
-  state.records ||= {};
-  state.settings.newWordsGoal ??= state.settings.dailyGoal ?? 10;
-  state.settings.reviewWordsGoal ??= 20;
+  await refreshState();
   elements.newGoal.value = state.settings.newWordsGoal;
   elements.reviewGoal.value = state.settings.reviewWordsGoal;
   elements.apiKey.value = state.settings.stepfunApiKey || '';
   elements.model.value = state.settings.stepfunModel || 'step-3.7-flash';
-  elements.endpoint.value = state.settings.stepfunEndpoint || 'https://api.stepfun.com/v1/chat/completions';
+  elements.endpoint.value = state.settings.stepfunEndpoint || 'https://api.stepfun.com/step_plan/v1/chat/completions';
   render();
   renderChat();
 })();

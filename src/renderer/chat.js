@@ -49,8 +49,10 @@ async function sendChatMessage(event) {
   try {
     state = await api.loadState();
     personality = await api.loadCatPersonality();
-    const reply = await api.sendChat({ messages: [{ role: 'system', content: personality }, { role: 'system', content: learningContext() }, ...messages], settings: state.settings });
-    messages.push({ role: 'assistant', content: reply });
+    const raw = await api.sendChat({ messages: [{ role: 'system', content: personality }, { role: 'system', content: learningContext() }, { role: 'system', content: window.chatActions.modelProtocol() }, ...messages], settings: state.settings });
+    const result = await window.chatActions.handleModelResponse(raw, api);
+    if (result.state) state = result.state;
+    messages.push({ role: 'assistant', content: result.reply });
   } catch (error) {
     messages.push({ role: 'assistant', content: `暂时没连上 StepFun：${error.message}` });
   } finally {

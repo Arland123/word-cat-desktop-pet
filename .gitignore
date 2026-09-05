@@ -4,3 +4,4 @@ dist/
 data/state.json
 __pycache__/
 .tmp-bongocat*/
+.app-staging*/

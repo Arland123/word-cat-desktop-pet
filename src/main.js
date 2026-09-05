@@ -24,9 +24,10 @@ const defaultState = {
     reviewWordsGoal: 20,
     stepfunApiKey: '',
     stepfunModel: 'step-3.7-flash',
-    stepfunEndpoint: 'https://api.stepfun.com/v1/chat/completions'
+    stepfunEndpoint: 'https://api.stepfun.com/step_plan/v1/chat/completions'
   },
-  records: {}
+  records: {},
+  studyEvents: {}
 };
 
 function ensureState() {
@@ -52,7 +53,8 @@ function ensureState() {
     settings.stepfunEndpoint = normalizeEndpoint(settings.stepfunEndpoint, defaultState.settings.stepfunEndpoint);
     const normalized = {
       settings,
-      records: normalizeRecords(loaded.records)
+      records: normalizeRecords(loaded.records),
+      studyEvents: normalizeStudyEvents(loaded.studyEvents)
     };
     if (sourceFile !== dataFile) saveState(normalized);
     return normalized;
@@ -84,13 +86,26 @@ function normalizeRecords(records) {
   return Object.fromEntries(Object.entries(records).map(([key, value]) => [key, normalizeRecord(value)]));
 }
 
+function normalizeStudyEvents(events) {
+  if (!events || typeof events !== 'object') return {};
+  return Object.fromEntries(Object.entries(events).map(([key, value]) => [
+    key,
+    Array.isArray(value) ? value.filter((type) => type === 'newWords' || type === 'reviewWords').slice(-1000) : []
+  ]).filter(([, value]) => value.length));
+}
+
 function normalizeEndpoint(value, fallback) {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:') return fallback;
     const pathName = url.pathname.replace(/\/+$/, '');
-    if (url.hostname === 'api.stepfun.com' && (!pathName || pathName === '/step_plan')) {
-      return 'https://api.stepfun.com/v1/chat/completions';
+    if (url.hostname === 'api.stepfun.com') {
+      if (!pathName || pathName === '/step_plan' || pathName === '/step_plan/v1') {
+        return 'https://api.stepfun.com/step_plan/v1/chat/completions';
+      }
+      if (pathName === '/step_plan/v1/chat/completions' || pathName === '/v1/chat/completions') {
+        return `https://api.stepfun.com${pathName}`;
+      }
     }
     return url.toString().replace(/\/$/, '');
   } catch {
@@ -101,6 +116,120 @@ function normalizeEndpoint(value, fallback) {
 function saveState(state) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(dataFile, JSON.stringify(state, null, 2), 'utf8');
+}
+
+function todayKey() {
+  return new Date().toLocaleDateString('sv-SE');
+}
+
+function normalizeDateKey(value) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) return value;
+  }
+  return todayKey();
+}
+
+function adjustStudyRecord({ newWords = 0, reviewWords = 0, date } = {}) {
+  const state = ensureState();
+  const newCount = Number(newWords);
+  const reviewCount = Number(reviewWords);
+  if (![newCount, reviewCount].every((value) => Number.isInteger(value) && value >= 0 && value <= 500)) {
+    throw new Error('打卡数量必须是 0 到 500 之间的整数');
+  }
+  const key = normalizeDateKey(date);
+  const current = normalizeRecord(state.records[key]);
+  if (current.newWords + newCount > 500 || current.reviewWords + reviewCount > 500) {
+    throw new Error('当天记录不能超过 500');
+  }
+  state.records[key] = {
+    newWords: current.newWords + newCount,
+    reviewWords: current.reviewWords + reviewCount
+  };
+  const events = state.studyEvents[key] || [];
+  for (let index = 0; index < newCount; index += 1) events.push('newWords');
+  for (let index = 0; index < reviewCount; index += 1) events.push('reviewWords');
+  state.studyEvents[key] = events.slice(-1000);
+  saveState(state);
+  return state;
+}
+
+function setStudyRecord({ newWords, reviewWords, date } = {}) {
+  const state = ensureState();
+  const hasNew = newWords !== null && newWords !== undefined;
+  const hasReview = reviewWords !== null && reviewWords !== undefined;
+  if (!hasNew && !hasReview) throw new Error('至少需要指定新词或复习词数量');
+  const values = [hasNew ? Number(newWords) : null, hasReview ? Number(reviewWords) : null];
+  if (values.some((value) => value !== null && (!Number.isInteger(value) || value < 0 || value > 500))) {
+    throw new Error('打卡数量必须是 0 到 500 之间的整数');
+  }
+  const key = normalizeDateKey(date);
+  const current = normalizeRecord(state.records[key]);
+  const next = { newWords: hasNew ? values[0] : current.newWords, reviewWords: hasReview ? values[1] : current.reviewWords };
+  if (next.newWords || next.reviewWords) state.records[key] = next;
+  else delete state.records[key];
+  delete state.studyEvents[key];
+  saveState(state);
+  return state;
+}
+
+function undoStudyRecord(date) {
+  const state = ensureState();
+  const key = normalizeDateKey(date);
+  const current = normalizeRecord(state.records[key]);
+  const events = state.studyEvents[key] || [];
+  const lastType = events.pop();
+  if (lastType === 'reviewWords' && current.reviewWords > 0) current.reviewWords -= 1;
+  else if (lastType === 'newWords' && current.newWords > 0) current.newWords -= 1;
+  else if (current.reviewWords > 0) current.reviewWords -= 1;
+  else if (current.newWords > 0) current.newWords -= 1;
+  else return state;
+  if (current.newWords || current.reviewWords) state.records[key] = current;
+  else delete state.records[key];
+  if (events.length) state.studyEvents[key] = events;
+  else delete state.studyEvents[key];
+  saveState(state);
+  return state;
+}
+
+function undoLastNewWord(date) {
+  const state = ensureState();
+  const key = normalizeDateKey(date);
+  const current = normalizeRecord(state.records[key]);
+  const events = state.studyEvents[key] || [];
+  const lastIndex = events.lastIndexOf('newWords');
+  if (lastIndex >= 0) {
+    events.splice(lastIndex, 1);
+    current.newWords = Math.max(0, current.newWords - 1);
+  } else {
+    return state;
+  }
+  if (current.newWords || current.reviewWords) state.records[key] = current;
+  else delete state.records[key];
+  if (events.length) state.studyEvents[key] = events;
+  else delete state.studyEvents[key];
+  saveState(state);
+  return state;
+}
+
+function undoLastReviewWord(date) {
+  const state = ensureState();
+  const key = normalizeDateKey(date);
+  const current = normalizeRecord(state.records[key]);
+  const events = state.studyEvents[key] || [];
+  const lastIndex = events.lastIndexOf('reviewWords');
+  if (lastIndex >= 0) {
+    events.splice(lastIndex, 1);
+    current.reviewWords = Math.max(0, current.reviewWords - 1);
+  } else {
+    return state;
+  }
+  if (current.newWords || current.reviewWords) state.records[key] = current;
+  else delete state.records[key];
+  if (events.length) state.studyEvents[key] = events;
+  else delete state.studyEvents[key];
+  saveState(state);
+  return state;
 }
 
 function createPetWindow() {
@@ -269,11 +398,17 @@ ipcMain.handle('state:save', (_event, state) => {
       stepfunModel: typeof state?.settings?.stepfunModel === 'string' && state.settings.stepfunModel.trim() ? state.settings.stepfunModel.trim() : current.settings.stepfunModel,
       stepfunEndpoint: normalizeEndpoint(state?.settings?.stepfunEndpoint, current.settings.stepfunEndpoint)
     },
-    records: normalizeRecords(state?.records && typeof state.records === 'object' ? state.records : current.records)
+    records: normalizeRecords(state?.records && typeof state.records === 'object' ? state.records : current.records),
+    studyEvents: normalizeStudyEvents(state?.studyEvents && typeof state.studyEvents === 'object' ? state.studyEvents : current.studyEvents)
   };
   saveState(safeState);
   return true;
 });
+ipcMain.handle('study:record', (_event, counts) => adjustStudyRecord(counts));
+ipcMain.handle('study:set', (_event, counts) => setStudyRecord(counts));
+ipcMain.handle('study:undo', (_event, date) => undoStudyRecord(date));
+ipcMain.handle('study:undo-new', (_event, date) => undoLastNewWord(date));
+ipcMain.handle('study:undo-review', (_event, date) => undoLastReviewWord(date));
 ipcMain.handle('panel:show', createPanelWindow);
 ipcMain.handle('chat:show', createChatWindow);
 ipcMain.handle('cat:personality', () => {

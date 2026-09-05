@@ -65,6 +65,7 @@ cat.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   cat.setPointerCapture(event.pointerId);
   dragState = { pointerId: event.pointerId, moved: false };
+  cat.classList.add('dragging');
   window.catApi.startPetDrag();
 });
 
@@ -82,6 +83,7 @@ cat.addEventListener('pointerup', async (event) => {
   if (!dragState || event.pointerId !== dragState.pointerId) return;
   const moved = dragState.moved;
   dragState = null;
+  cat.classList.remove('dragging');
   if (cat.hasPointerCapture(event.pointerId)) cat.releasePointerCapture(event.pointerId);
   window.catApi.stopPetDrag();
   if (moved) {
@@ -93,6 +95,7 @@ cat.addEventListener('pointerup', async (event) => {
 cat.addEventListener('pointercancel', () => {
   if (!dragState) return;
   dragState = null;
+  cat.classList.remove('dragging');
   window.catApi.stopPetDrag();
   window.catApi.setIgnoreMouse(false);
 });
@@ -100,6 +103,7 @@ cat.addEventListener('pointercancel', () => {
 window.addEventListener('blur', () => {
   if (!dragState) return;
   dragState = null;
+  cat.classList.remove('dragging');
   window.catApi.stopPetDrag();
   window.catApi.setIgnoreMouse(false);
 });

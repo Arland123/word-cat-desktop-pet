@@ -29,6 +29,7 @@ h1, h2, h3 { margin: 0; color: var(--ink); letter-spacing: 0; }
 h1 { font-size: 26px; }
 h2 { font-size: 16px; }
 .topbar p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+.refresh-button { padding: 7px 12px; font-size: 12px; }
 
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
 .stats article { height: 78px; display: grid; place-content: center; text-align: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -51,7 +52,10 @@ h2 { font-size: 16px; }
 .goal-row span { color: var(--muted); font-size: 11px; }
 .progress-track { width: 100%; height: 10px; overflow: hidden; border-radius: 5px; background: #e8ecf1; }
 #progress-fill { width: 100%; height: 100%; border-radius: inherit; background: var(--green); transform: scaleX(0); transform-origin: left center; }
-.checkin-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 16px; }
+.checkin-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.undo-button { background: #fff; color: #b57922; border-color: #e2d3b0; font-weight: 600; font-size: 12px; }
+.undo-button:hover:not(:disabled) { background: #fdf6e3; border-color: #c9a84c; }
+.undo-button:disabled { color: #c5bca8; border-color: #ece5d5; }
 #new-progress-fill, #review-progress-fill { width: 100%; height: 100%; border-radius: inherit; background: var(--green); transform: scaleX(0); transform-origin: left center; }
 #review-progress-fill { background: var(--blue); }
 #checkin-button { background: var(--green); }
