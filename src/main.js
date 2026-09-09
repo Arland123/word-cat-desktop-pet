@@ -638,23 +638,37 @@ ipcMain.on('pet:scale-step', (_event, delta) => {
   const current = clampPetScale(ensureState().settings.petScale);
   applyPetScale(current + Number(delta) * 0.05);
 });
-ipcMain.handle('chat:send', async (_event, { messages, settings } = {}) => {
+const chatRequests = new Map();
+ipcMain.handle('chat:send', async (event, { messages, settings } = {}) => {
   const current = ensureState();
   const apiKey = (settings?.aiApiKey || current.settings.aiApiKey || process.env.AI_API_KEY || process.env.STEPFUN_API_KEY || '').trim();
   if (!apiKey) throw new Error('请先在设置中填写 API Key，或设置 AI_API_KEY 环境变量');
   const endpoint = normalizeEndpoint(settings?.aiEndpoint, current.settings.aiEndpoint);
   const model = settings?.aiModel?.trim() || current.settings.aiModel;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, stream: false })
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = body?.error?.message || body?.message || body?.error?.code || JSON.stringify(body);
-    throw new Error(`AI 请求失败（${response.status}）：${detail}`);
+  const controller = new AbortController();
+  chatRequests.set(event.sender.id, controller);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages, stream: false }),
+      signal: controller.signal
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = body?.error?.message || body?.message || body?.error?.code || JSON.stringify(body);
+      throw new Error(`AI 请求失败（${response.status}）：${detail}`);
+    }
+    const content = body?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') throw new Error('AI 返回内容格式异常');
+    return content;
+  } catch (error) {
+    if (controller.signal.aborted) return null;
+    throw error;
+  } finally {
+    chatRequests.delete(event.sender.id);
   }
-  const content = body?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') throw new Error('AI 返回内容格式异常');
-  return content;
+});
+ipcMain.on('chat:abort', (event) => {
+  chatRequests.get(event.sender.id)?.abort();
 });

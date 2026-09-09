@@ -3,6 +3,7 @@ const list = document.getElementById('chat-list');
 const form = document.getElementById('chat-form');
 const input = document.getElementById('chat-input');
 const clearButton = document.getElementById('clear-chat');
+const stopButton = document.getElementById('chat-stop');
 let state = null;
 let personality = '';
 let messages = [];
@@ -44,18 +45,20 @@ function render() {
 
 async function sendChatMessage(event) {
   if (event) event.preventDefault();
-  if (form.querySelector('button').disabled) return;
+  if (form.querySelector('button[type="submit"]').disabled) return;
   const content = input.value.trim();
   if (!content) return;
   messages.push({ role: 'user', content });
   input.value = '';
   render();
-  const button = form.querySelector('button');
+  const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
+  stopButton.hidden = false;
   try {
     state = await api.loadState();
     personality = await api.loadCatPersonality();
     const raw = await api.sendChat({ messages: [{ role: 'system', content: personality }, { role: 'system', content: learningContext() }, { role: 'system', content: window.chatActions.modelProtocol() }, ...messages], settings: state.settings });
+    if (raw === null) return;
     const result = await window.chatActions.handleModelResponse(raw, api);
     if (result.state) state = result.state;
     messages.push({ role: 'assistant', content: result.reply });
@@ -63,6 +66,7 @@ async function sendChatMessage(event) {
     messages.push({ role: 'assistant', content: `暂时没连上 AI 接口：${error.message}` });
   } finally {
     button.disabled = false;
+    stopButton.hidden = true;
     render();
     input.focus();
   }
@@ -74,6 +78,7 @@ input.addEventListener('keydown', (event) => {
   sendChatMessage();
 });
 form.addEventListener('submit', sendChatMessage);
+stopButton.addEventListener('click', () => api.abortChat());
 
 clearButton.addEventListener('click', () => { messages = []; render(); input.focus(); });
 

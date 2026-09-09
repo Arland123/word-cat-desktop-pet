@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('catApi', {
   showChat: () => ipcRenderer.invoke('chat:show'),
   loadCatPersonality: () => ipcRenderer.invoke('cat:personality'),
   sendChat: (payload) => ipcRenderer.invoke('chat:send', payload),
+  abortChat: () => ipcRenderer.send('chat:abort'),
   onStateChanged: (callback) => ipcRenderer.on('state:changed', (_event, state) => callback(state)),
   onPetBubble: (callback) => ipcRenderer.on('pet:bubble', (_event, payload) => callback(payload)),
   onPanelToast: (callback) => ipcRenderer.on('panel:toast', (_event, message) => callback(message)),

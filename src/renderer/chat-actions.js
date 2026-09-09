@@ -3,8 +3,8 @@
     return [
       `今天是 ${new Date().toLocaleDateString('sv-SE')}，所有日期换算以此为准。`,
       '请先判断用户这句话是否要求操作桌宠。你必须只输出一个 JSON 对象，不要输出 Markdown 或额外文字。',
-      'JSON 格式：{"action":"record|set_record|undo|open_panel|open_chat|none","newWords":整数或null,"reviewWords":整数或null,"date":"YYYY-MM-DD","reply":"给用户的简短中文回复，必须是纯文本，不要包含星号、井号、横线列表等 Markdown 符号"}。整个输出必须是合法 JSON：reply 里如需换行，必须写成 \\n 转义，不要输出真实换行符。',
-      '只有用户明确表达了记录/修改/打卡/背了/复习了/撤销或打开面板的意图时，action 才能不是 none；普通陈述、提问和闲聊必须使用 none。',
+      'JSON 格式：{"action":"record|set_record|undo|open_panel|open_chat|none","newWords":整数或null,"reviewWords":整数或null,"date":"YYYY-MM-DD","reply":"给用户的中文回复，默认简短，用户明确要求完整输出长内容时按需变长；必须是纯文本，不要包含星号、井号、横线列表等 Markdown 符号"}。整个输出必须是合法 JSON：reply 里如需换行，必须写成 \\n 转义，不要输出真实换行符。',
+      '只有用户明确表达记录/修改学习数量、撤销打卡或打开面板/聊天窗口的意图时，action 才能不是 none；“背了/复习了”仅在指向学习数量记录时才算打卡操作。用户要求你表演或完成某件事（例如背诗、背乘法表、讲故事）时必须使用 none，并在 reply 里按要求完整完成，不要当作打卡，也不要只用一句夸奖带过。普通陈述、提问和闲聊也必须使用 none。',
       'record 表示在 date 对应日期增加数量；set_record 表示把用户明确指定的字段改成该数量，未指定的字段填 null 并保留原值。没有提到日期时使用今天。请把“今天、昨天、前天、X月X日、X年X月X日”等日期换算成 YYYY-MM-DD。',
       '无法确定数量或日期时使用 none，不要猜测。record 的 newWords 和 reviewWords 没有对应数量时填 0。'
     ].join('\n');

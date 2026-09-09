@@ -7,7 +7,7 @@ const elements = {
   refreshButton: byId('refresh-button'),
   settingsForm: byId('settings-form'), newGoal: byId('new-goal'), reviewGoal: byId('review-goal'),
   apiForm: byId('api-form'), apiKey: byId('api-key'), model: byId('model'), endpoint: byId('endpoint'),
-  chatList: byId('chat-list'), chatForm: byId('chat-form'), chatInput: byId('chat-input'), clearChat: byId('clear-chat')
+  chatList: byId('chat-list'), chatForm: byId('chat-form'), chatInput: byId('chat-input'), clearChat: byId('clear-chat'), chatStop: byId('chat-stop')
 };
 const recordModal = byId('record-modal');
 const recordTitle = byId('record-title');
@@ -256,14 +256,15 @@ function renderChat() {
 
 async function sendChatMessage(event) {
   if (event) event.preventDefault();
-  if (elements.chatForm.querySelector('button').disabled) return;
+  if (elements.chatForm.querySelector('button[type="submit"]').disabled) return;
   const content = elements.chatInput.value.trim();
   if (!content) return;
   chatMessages.push({ role: 'user', content });
   elements.chatInput.value = '';
   renderChat();
-  const button = elements.chatForm.querySelector('button');
+  const button = elements.chatForm.querySelector('button[type="submit"]');
   button.disabled = true;
+  elements.chatStop.hidden = false;
   try {
     state = await api.loadState();
     catPersonality = await api.loadCatPersonality();
@@ -276,6 +277,7 @@ async function sendChatMessage(event) {
       ],
       settings: apiSettings()
     });
+    if (raw === null) return;
     const result = await window.chatActions.handleModelResponse(raw, api);
     if (result.state) state = result.state;
     chatMessages.push({ role: 'assistant', content: result.reply });
@@ -283,6 +285,7 @@ async function sendChatMessage(event) {
     chatMessages.push({ role: 'assistant', content: `暂时没连上 AI 接口：${error.message}` });
   } finally {
     button.disabled = false;
+    elements.chatStop.hidden = true;
     renderChat();
     elements.chatInput.focus();
   }
@@ -294,6 +297,7 @@ elements.chatInput.addEventListener('keydown', (event) => {
   sendChatMessage();
 });
 elements.chatForm.addEventListener('submit', sendChatMessage);
+elements.chatStop.addEventListener('click', () => api.abortChat());
 
 elements.clearChat.addEventListener('click', () => { chatMessages = []; renderChat(); });
 elements.refreshButton.addEventListener('click', () => refreshState(true));
