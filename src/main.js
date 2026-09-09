@@ -468,14 +468,14 @@ function sendToPet(channel, payload) {
 }
 
 const REMINDER_TEMPLATES = [
-  { tag: 'both', text: '该背单词啦，还差新词 {new} 个、复习 {review} 个，喵~' },
-  { tag: 'both', text: '目标就在眼前，新词差 {new}、复习差 {review}，加油喵！' },
-  { tag: 'new', text: '学累了吗？顺手记几个词，新词只差 {new} 个啦。' },
-  { tag: 'new', text: '坚持就是胜利，新词还差 {new} 个就达标了喵！' },
-  { tag: 'review', text: '喵，今天的复习还差 {review} 个，别忘了~' },
-  { tag: 'review', text: '复习 {review} 个就完成今天的目标啦，冲一把？' },
-  { tag: 'none', text: '今天一个词都还没记录哦，先从新词开始吧，喵~' },
-  { tag: 'none', text: '打卡还没开始哦，背几个词让我看到你的进度喵~' }
+  { tag: 'both', text: '还差新词 {new}、复习 {review}，喵' },
+  { tag: 'both', text: '今天还差：新词 {new}、复习 {review}' },
+  { tag: 'new', text: '新词还差 {new} 个，冲一把喵' },
+  { tag: 'new', text: '再记 {new} 个新词就达标啦，喵' },
+  { tag: 'review', text: '复习还差 {review} 个，别忘了喵' },
+  { tag: 'review', text: '再复习 {review} 个就完成啦，喵' },
+  { tag: 'none', text: '今天还没打卡哦，先背几个新词喵' },
+  { tag: 'none', text: '先从新词开始吧，我陪着你喵' }
 ];
 
 function buildReminderText(record, settings) {
@@ -560,29 +560,28 @@ function celebrateStudy({ state, key, kind, counts, previous, undone }) {
       const parts = [];
       if (undone.newWords) parts.push(`新词 -${undone.newWords}`);
       if (undone.reviewWords) parts.push(`复习 -${undone.reviewWords}`);
-      message = `已撤销最近一次打卡（${parts.join('、')}），随时重新开始，喵~`;
+      message = `已撤销：${parts.join('、')}`;
     } else {
-      message = '没有找到可以撤销的打卡记录，喵~';
+      message = '没有可撤销的记录，喵~';
     }
   } else {
-    const parts = [];
     if (kind === 'set') {
+      const parts = [];
       if (counts?.newWords !== null && counts?.newWords !== undefined) parts.push(`新词 ${record.newWords}`);
       if (counts?.reviewWords !== null && counts?.reviewWords !== undefined) parts.push(`复习 ${record.reviewWords}`);
-      message = `已更新${key === todayKey() ? '今天' : key}：${parts.join('、')}`;
+      message = key === todayKey() ? `已更新：${parts.join('、')}` : `已更新 ${key.slice(5).replace('-', '月')}日：${parts.join('、')}`;
     } else {
+      const parts = [];
       if (counts?.newWords) parts.push(`新词 +${counts.newWords}`);
       if (counts?.reviewWords) parts.push(`复习 +${counts.reviewWords}`);
       message = `打卡成功：${parts.join('、')}`;
     }
     const crossedGoal = (current, before, goal) => goal > 0 && current >= goal && before < goal;
-    if (crossedGoal(record.newWords, previous.newWords, state.settings.newWordsGoal) && crossedGoal(record.reviewWords, previous.reviewWords, state.settings.reviewWordsGoal)) {
-      message += `，今日目标全部达成，已连续打卡 ${calculateStreak(state)} 天！🎉`;
-    } else if (crossedGoal(record.newWords, previous.newWords, state.settings.newWordsGoal)) {
-      message += '，新词目标达成！🎉';
-    } else if (crossedGoal(record.reviewWords, previous.reviewWords, state.settings.reviewWordsGoal)) {
-      message += '，复习目标达成！🎉';
-    }
+    const newCrossed = crossedGoal(record.newWords, previous.newWords, state.settings.newWordsGoal);
+    const reviewCrossed = crossedGoal(record.reviewWords, previous.reviewWords, state.settings.reviewWordsGoal);
+    if (newCrossed && reviewCrossed) message = `目标全部达成，连续 ${calculateStreak(state)} 天！🎉`;
+    else if (newCrossed) message = '新词目标达成！🎉';
+    else if (reviewCrossed) message = '复习目标达成！🎉';
   }
   sendToPet('pet:bubble', { text: message, mood });
   if (panelWindow && !panelWindow.isDestroyed()) panelWindow.webContents.send('panel:toast', message);

@@ -32,7 +32,8 @@ function updateMousePassThrough(event) {
 }
 
 function showBubble(text, mood = 'remind') {
-  bubble.textContent = text;
+  const chars = Array.from(String(text ?? ''));
+  bubble.textContent = chars.length > 20 ? chars.slice(0, 19).join('') + '…' : String(text ?? '');
   bubble.classList.remove('hidden');
   cat.className = mood;
   clearTimeout(bubbleTimer);
@@ -56,9 +57,9 @@ function progressMessage() {
   const record = todayRecord();
   const newRemaining = Math.max(0, state.settings.newWordsGoal - record.newWords);
   const reviewRemaining = Math.max(0, state.settings.reviewWordsGoal - record.reviewWords);
-  if (!newRemaining && !reviewRemaining) return { text: `今天新词 ${record.newWords} 个、复习 ${record.reviewWords} 个，目标都完成啦！`, mood: 'happy' };
-  if (!record.newWords && !record.reviewWords) return { text: '今天还没有学习记录，先记一个新词吧！', mood: 'remind' };
-  return { text: `今天新词 ${record.newWords} 个、复习 ${record.reviewWords} 个；还差新词 ${newRemaining}、复习 ${reviewRemaining}`, mood: newRemaining + reviewRemaining <= 3 ? 'happy' : 'remind' };
+  if (!newRemaining && !reviewRemaining) return { text: '今天目标全部完成，喵~', mood: 'happy' };
+  if (!record.newWords && !record.reviewWords) return { text: '还没打卡哦，记一个新词吧', mood: 'remind' };
+  return { text: `还差新词 ${newRemaining}、复习 ${reviewRemaining}，喵~`, mood: newRemaining + reviewRemaining <= 3 ? 'happy' : 'remind' };
 }
 
 cat.addEventListener('pointerdown', (event) => {
