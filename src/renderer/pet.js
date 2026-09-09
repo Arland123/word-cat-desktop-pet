@@ -18,6 +18,7 @@ function prepareHitTest() {
 }
 
 function hitTest(event) {
+  if (!hitCanvas.width || !hitCanvas.height) return false;
   const rect = catImage.getBoundingClientRect();
   if (!rect.width || !rect.height || event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return false;
   const x = Math.min(hitCanvas.width - 1, Math.max(0, Math.floor((event.clientX - rect.left) * hitCanvas.width / rect.width)));
@@ -120,6 +121,20 @@ document.addEventListener('contextmenu', (event) => {
   event.preventDefault();
   window.catApi.showPetMenu();
 });
+
+window.catApi.onPetBubble?.((payload) => showBubble(payload?.text ?? '', payload?.mood === 'remind' ? 'remind' : 'happy'));
+window.catApi.onStateChanged?.((nextState) => {
+  if (nextState) state = nextState;
+});
+window.catApi.onPetScale?.((scale) => {
+  const value = Number(scale);
+  if (Number.isFinite(value) && value > 0) document.body.style.zoom = String(value);
+});
+document.addEventListener('wheel', (event) => {
+  if (!event.ctrlKey || !hitTest(event)) return;
+  event.preventDefault();
+  window.catApi.stepPetScale(event.deltaY < 0 ? 1 : -1);
+}, { passive: false });
 
 (async () => {
   if (catImage.complete) prepareHitTest();

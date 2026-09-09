@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('catApi', {
   loadState: () => ipcRenderer.invoke('state:load'),
-  saveState: (state) => ipcRenderer.invoke('state:save', state),
+  saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   recordStudy: (counts) => ipcRenderer.invoke('study:record', counts),
   setStudy: (counts) => ipcRenderer.invoke('study:set', counts),
   undoStudy: (date) => ipcRenderer.invoke('study:undo', date),
@@ -12,11 +12,14 @@ contextBridge.exposeInMainWorld('catApi', {
   showChat: () => ipcRenderer.invoke('chat:show'),
   loadCatPersonality: () => ipcRenderer.invoke('cat:personality'),
   sendChat: (payload) => ipcRenderer.invoke('chat:send', payload),
+  onStateChanged: (callback) => ipcRenderer.on('state:changed', (_event, state) => callback(state)),
+  onPetBubble: (callback) => ipcRenderer.on('pet:bubble', (_event, payload) => callback(payload)),
+  onPanelToast: (callback) => ipcRenderer.on('panel:toast', (_event, message) => callback(message)),
   showPetMenu: () => ipcRenderer.send('pet:context-menu'),
-  getPetPosition: () => ipcRenderer.invoke('pet:get-position'),
-  movePet: (position) => ipcRenderer.send('pet:move', position),
   startPetDrag: () => ipcRenderer.send('pet:drag-start'),
   updatePetDrag: () => ipcRenderer.send('pet:drag-move'),
   stopPetDrag: () => ipcRenderer.send('pet:drag-end'),
-  setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore)
+  setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore),
+  onPetScale: (callback) => ipcRenderer.on('pet:scale', (_event, scale) => callback(scale)),
+  stepPetScale: (delta) => ipcRenderer.send('pet:scale-step', delta)
 });

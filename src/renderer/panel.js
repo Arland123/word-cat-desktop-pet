@@ -88,12 +88,13 @@ function renderHistory() {
     cell.addEventListener('click', async () => {
       const value = await showRecordPrompt(`补录 ${key} 学习数量`, record);
       if (value === null || ![value.newWords, value.reviewWords].every((number) => Number.isInteger(number) && number >= 0 && number <= 500)) return;
-      if (!value.newWords && !value.reviewWords) delete state.records[key];
-      else state.records[key] = value;
-      if (state.studyEvents) delete state.studyEvents[key];
-      await api.saveState(state);
-      render();
-      toast('补录已保存');
+      try {
+        state = await api.setStudy({ newWords: value.newWords, reviewWords: value.reviewWords, date: key });
+        render();
+        toast('补录已保存');
+      } catch (error) {
+        toast(error.message || '补录保存失败，请稍后重试');
+      }
     });
     elements.history.appendChild(cell);
   }
@@ -123,6 +124,8 @@ function render() {
   elements.reviewProgressFill.parentElement.setAttribute('aria-valuemax', reviewGoal);
   elements.reviewProgressFill.parentElement.setAttribute('aria-valuenow', today.reviewWords);
   elements.streakLine.textContent = !newRemaining && !reviewRemaining ? `今天新词和复习都达标，连续打卡 ${streak} 天` : `今天已完成新词 ${today.newWords} 个、复习 ${today.reviewWords} 个`;
+  elements.newWordButton.disabled = today.newWords >= 500;
+  elements.reviewWordButton.disabled = today.reviewWords >= 500;
   elements.undoNewButton.disabled = today.newWords === 0;
   elements.undoReviewButton.disabled = today.reviewWords === 0;
   renderHistory();
@@ -152,9 +155,13 @@ recordModal.addEventListener('keydown', (event) => {
 
 async function addStudyRecord(type) {
   const key = dateKey();
-  state = await api.recordStudy({ newWords: type === 'newWords' ? 1 : 0, reviewWords: type === 'reviewWords' ? 1 : 0, date: key });
-  render();
-  toast(type === 'newWords' ? '已记录一个新词' : '已记录一次复习');
+  try {
+    state = await api.recordStudy({ newWords: type === 'newWords' ? 1 : 0, reviewWords: type === 'reviewWords' ? 1 : 0, date: key });
+    render();
+    toast(type === 'newWords' ? '已记录一个新词' : '已记录一次复习');
+  } catch (error) {
+    toast(error.message || '记录失败，请稍后重试');
+  }
 }
 
 elements.newWordButton.addEventListener('click', () => addStudyRecord('newWords'));
@@ -162,16 +169,24 @@ elements.reviewWordButton.addEventListener('click', () => addStudyRecord('review
 
 elements.undoNewButton.addEventListener('click', async () => {
   const key = dateKey();
-  state = await api.undoNewWord(key);
-  render();
-  toast('已撤销一个新词');
+  try {
+    state = await api.undoNewWord(key);
+    render();
+    toast('已撤销一个新词');
+  } catch (error) {
+    toast(error.message || '撤销失败，请稍后重试');
+  }
 });
 
 elements.undoReviewButton.addEventListener('click', async () => {
   const key = dateKey();
-  state = await api.undoReviewWord(key);
-  render();
-  toast('已撤销一次复习');
+  try {
+    state = await api.undoReviewWord(key);
+    render();
+    toast('已撤销一次复习');
+  } catch (error) {
+    toast(error.message || '撤销失败，请稍后重试');
+  }
 });
 
 elements.settingsForm.addEventListener('submit', async (event) => {
@@ -182,10 +197,13 @@ elements.settingsForm.addEventListener('submit', async (event) => {
     toast('请检查打卡设置');
     return;
   }
-  state.settings = { ...state.settings, newWordsGoal, reviewWordsGoal };
-  await api.saveState(state);
-  render();
-  toast('打卡设置已保存');
+  try {
+    state = await api.saveSettings({ newWordsGoal, reviewWordsGoal });
+    render();
+    toast('打卡设置已保存');
+  } catch (error) {
+    toast(error.message || '保存失败，请稍后重试');
+  }
 });
 
 function apiSettings() {
@@ -213,9 +231,12 @@ function learningContext() {
 elements.apiForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!elements.model.value.trim() || !elements.endpoint.value.trim()) return toast('请填写模型和接口地址');
-  state.settings = { ...state.settings, ...apiSettings() };
-  await api.saveState(state);
-  toast('StepFun 设置已保存');
+  try {
+    state = await api.saveSettings(apiSettings());
+    toast('StepFun 设置已保存');
+  } catch (error) {
+    toast(error.message || '保存失败，请稍后重试');
+  }
 });
 
 function renderChat() {
@@ -276,6 +297,12 @@ elements.chatForm.addEventListener('submit', sendChatMessage);
 
 elements.clearChat.addEventListener('click', () => { chatMessages = []; renderChat(); });
 elements.refreshButton.addEventListener('click', () => refreshState(true));
+api.onStateChanged((nextState) => {
+  if (!nextState) return;
+  state = nextState;
+  render();
+});
+api.onPanelToast((message) => toast(message));
 window.addEventListener('focus', () => refreshState());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') refreshState();
@@ -286,6 +313,10 @@ setInterval(() => {
 
 (async () => {
   await refreshState();
+  if (!state) {
+    elements.streakLine.textContent = '数据载入失败，请点击右上角“刷新”重试';
+    return;
+  }
   elements.newGoal.value = state.settings.newWordsGoal;
   elements.reviewGoal.value = state.settings.reviewWordsGoal;
   elements.apiKey.value = state.settings.stepfunApiKey || '';

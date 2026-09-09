@@ -22,7 +22,13 @@ function streak() {
 function learningContext() {
   const today = recordsFor();
   const total = Object.values(state.records).reduce((sum, value) => { const record = Array.isArray(value) ? { newWords: value.length, reviewWords: 0 } : value; return sum + (record?.newWords || 0) + (record?.reviewWords || 0); }, 0);
-  return `用户单词学习数据（仅用于准确反馈，不要猜测或修改）：今天新词 ${today.newWords} 个（目标 ${state.settings.newWordsGoal}），复习 ${today.reviewWords} 个（目标 ${state.settings.reviewWordsGoal}）；连续达标 ${streak()} 天；累计学习 ${total} 个。`;
+  const recent = [];
+  for (let offset = 0; offset < 7; offset += 1) {
+    const key = keyFromOffset(offset);
+    const record = recordsFor(key);
+    recent.push(`${key}: 新词 ${record.newWords} 个、复习 ${record.reviewWords} 个`);
+  }
+  return `用户单词学习数据（仅用于准确反馈，不要猜测或修改）：今天新词 ${today.newWords} 个（目标 ${state.settings.newWordsGoal}），复习 ${today.reviewWords} 个（目标 ${state.settings.reviewWordsGoal}）；连续达标 ${streak()} 天；累计学习 ${total} 个；最近 7 天：${recent.join('；')}。`;
 }
 function render() {
   if (!messages.length) { list.innerHTML = '<p class="empty">说点什么吧，喵。</p>'; return; }

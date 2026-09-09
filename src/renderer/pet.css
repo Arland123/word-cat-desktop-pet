@@ -46,6 +46,7 @@ body {
   top: -28px;
   left: 50%;
   min-width: 116px;
+  max-width: 240px;
   padding: 10px 15px;
   border: 3px solid #23477a;
   border-radius: 20px;

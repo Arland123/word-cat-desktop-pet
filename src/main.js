@@ -22,6 +22,7 @@ const defaultState = {
   settings: {
     newWordsGoal: 10,
     reviewWordsGoal: 20,
+    petScale: 1,
     stepfunApiKey: '',
     stepfunModel: 'step-3.7-flash',
     stepfunEndpoint: 'https://api.stepfun.com/step_plan/v1/chat/completions'
@@ -29,6 +30,15 @@ const defaultState = {
   records: {},
   studyEvents: {}
 };
+
+const PET_BASE_WIDTH = 270;
+const PET_BASE_HEIGHT = 290;
+
+function clampPetScale(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 1;
+  return Math.round(Math.min(2, Math.max(0.5, number)) * 100) / 100;
+}
 
 function ensureState() {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -48,6 +58,7 @@ function ensureState() {
     settings.newWordsGoal = clampInteger(settings.newWordsGoal, 0, 500, defaultState.settings.newWordsGoal);
     settings.reviewWordsGoal = clampInteger(settings.reviewWordsGoal, 0, 500, defaultState.settings.reviewWordsGoal);
     settings.stepfunApiKey = typeof settings.stepfunApiKey === 'string' ? settings.stepfunApiKey.trim() : '';
+    settings.petScale = clampPetScale(legacySettings.petScale ?? defaultState.settings.petScale);
     settings.stepfunModel = typeof settings.stepfunModel === 'string' && settings.stepfunModel.trim() ? settings.stepfunModel.trim() : defaultState.settings.stepfunModel;
     if (settings.stepfunModel === 'step-1-8k' || settings.stepfunModel === 'step-3.5-flash') settings.stepfunModel = defaultState.settings.stepfunModel;
     settings.stepfunEndpoint = normalizeEndpoint(settings.stepfunEndpoint, defaultState.settings.stepfunEndpoint);
@@ -86,11 +97,21 @@ function normalizeRecords(records) {
   return Object.fromEntries(Object.entries(records).map(([key, value]) => [key, normalizeRecord(value)]));
 }
 
+function normalizeEvent(value) {
+  if (value === 'newWords') return { newWords: 1, reviewWords: 0 };
+  if (value === 'reviewWords') return { newWords: 0, reviewWords: 1 };
+  if (!value || typeof value !== 'object') return { newWords: 0, reviewWords: 0 };
+  return {
+    newWords: clampInteger(value.newWords, 0, 500, 0),
+    reviewWords: clampInteger(value.reviewWords, 0, 500, 0)
+  };
+}
+
 function normalizeStudyEvents(events) {
   if (!events || typeof events !== 'object') return {};
   return Object.fromEntries(Object.entries(events).map(([key, value]) => [
     key,
-    Array.isArray(value) ? value.filter((type) => type === 'newWords' || type === 'reviewWords').slice(-1000) : []
+    (Array.isArray(value) ? value : []).map(normalizeEvent).filter((entry) => entry.newWords || entry.reviewWords).slice(-1000)
   ]).filter(([, value]) => value.length));
 }
 
@@ -146,10 +167,11 @@ function adjustStudyRecord({ newWords = 0, reviewWords = 0, date } = {}) {
     newWords: current.newWords + newCount,
     reviewWords: current.reviewWords + reviewCount
   };
-  const events = state.studyEvents[key] || [];
-  for (let index = 0; index < newCount; index += 1) events.push('newWords');
-  for (let index = 0; index < reviewCount; index += 1) events.push('reviewWords');
-  state.studyEvents[key] = events.slice(-1000);
+  if (newCount > 0 || reviewCount > 0) {
+    const events = state.studyEvents[key] || [];
+    events.push({ newWords: newCount, reviewWords: reviewCount });
+    state.studyEvents[key] = events.slice(-1000);
+  }
   saveState(state);
   return state;
 }
@@ -178,18 +200,16 @@ function undoStudyRecord(date) {
   const key = normalizeDateKey(date);
   const current = normalizeRecord(state.records[key]);
   const events = state.studyEvents[key] || [];
-  const lastType = events.pop();
-  if (lastType === 'reviewWords' && current.reviewWords > 0) current.reviewWords -= 1;
-  else if (lastType === 'newWords' && current.newWords > 0) current.newWords -= 1;
-  else if (current.reviewWords > 0) current.reviewWords -= 1;
-  else if (current.newWords > 0) current.newWords -= 1;
-  else return state;
+  const batch = normalizeEvent(events.pop());
+  if (!batch.newWords && !batch.reviewWords) return { state, undone: null };
+  current.newWords = Math.max(0, current.newWords - batch.newWords);
+  current.reviewWords = Math.max(0, current.reviewWords - batch.reviewWords);
   if (current.newWords || current.reviewWords) state.records[key] = current;
   else delete state.records[key];
   if (events.length) state.studyEvents[key] = events;
   else delete state.studyEvents[key];
   saveState(state);
-  return state;
+  return { state, undone: batch };
 }
 
 function undoLastNewWord(date) {
@@ -197,18 +217,21 @@ function undoLastNewWord(date) {
   const key = normalizeDateKey(date);
   const current = normalizeRecord(state.records[key]);
   const events = state.studyEvents[key] || [];
-  const lastIndex = events.lastIndexOf('newWords');
-  if (lastIndex >= 0) {
-    events.splice(lastIndex, 1);
-    current.newWords = Math.max(0, current.newWords - 1);
-  } else {
-    return state;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const entry = normalizeEvent(events[index]);
+    if (entry.newWords > 0) {
+      entry.newWords -= 1;
+      if (entry.newWords || entry.reviewWords) events[index] = entry;
+      else events.splice(index, 1);
+      current.newWords = Math.max(0, current.newWords - 1);
+      if (current.newWords || current.reviewWords) state.records[key] = current;
+      else delete state.records[key];
+      if (events.length) state.studyEvents[key] = events;
+      else delete state.studyEvents[key];
+      saveState(state);
+      return state;
+    }
   }
-  if (current.newWords || current.reviewWords) state.records[key] = current;
-  else delete state.records[key];
-  if (events.length) state.studyEvents[key] = events;
-  else delete state.studyEvents[key];
-  saveState(state);
   return state;
 }
 
@@ -217,28 +240,64 @@ function undoLastReviewWord(date) {
   const key = normalizeDateKey(date);
   const current = normalizeRecord(state.records[key]);
   const events = state.studyEvents[key] || [];
-  const lastIndex = events.lastIndexOf('reviewWords');
-  if (lastIndex >= 0) {
-    events.splice(lastIndex, 1);
-    current.reviewWords = Math.max(0, current.reviewWords - 1);
-  } else {
-    return state;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const entry = normalizeEvent(events[index]);
+    if (entry.reviewWords > 0) {
+      entry.reviewWords -= 1;
+      if (entry.newWords || entry.reviewWords) events[index] = entry;
+      else events.splice(index, 1);
+      current.reviewWords = Math.max(0, current.reviewWords - 1);
+      if (current.newWords || current.reviewWords) state.records[key] = current;
+      else delete state.records[key];
+      if (events.length) state.studyEvents[key] = events;
+      else delete state.studyEvents[key];
+      saveState(state);
+      return state;
+    }
   }
-  if (current.newWords || current.reviewWords) state.records[key] = current;
-  else delete state.records[key];
-  if (events.length) state.studyEvents[key] = events;
-  else delete state.studyEvents[key];
-  saveState(state);
   return state;
 }
 
+function petBoundsFor(scale, anchor) {
+  const width = Math.round(PET_BASE_WIDTH * scale);
+  const height = Math.round(PET_BASE_HEIGHT * scale);
+  const workArea = screen.getPrimaryDisplay().workArea;
+  const base = anchor || { x: workArea.x + workArea.width - 330, y: workArea.y + workArea.height - 380, width: PET_BASE_WIDTH, height: PET_BASE_HEIGHT };
+  return {
+    width,
+    height,
+    x: Math.round(base.x + base.width / 2 - width / 2),
+    y: Math.round(base.y + base.height - height)
+  };
+}
+
+function applyPetScale(value) {
+  const scale = clampPetScale(value);
+  const state = ensureState();
+  if (state.settings.petScale === scale && petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('pet:scale', scale);
+    return scale;
+  }
+  state.settings.petScale = scale;
+  saveState(state);
+  if (petWindow && !petWindow.isDestroyed()) {
+    const [currentX, currentY] = petWindow.getPosition();
+    const [currentWidth, currentHeight] = petWindow.getSize();
+    const next = petBoundsFor(scale, { x: currentX, y: currentY, width: currentWidth, height: currentHeight });
+    petWindow.setBounds(next);
+    petWindow.webContents.send('pet:scale', scale);
+  }
+  return scale;
+}
+
 function createPetWindow() {
-  const { workArea } = screen.getPrimaryDisplay();
+  const scale = clampPetScale(ensureState().settings.petScale);
+  const bounds = petBoundsFor(scale);
   petWindow = new BrowserWindow({
-    width: 270,
-    height: 290,
-    x: workArea.x + workArea.width - 330,
-    y: workArea.y + workArea.height - 380,
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
     transparent: true,
     frame: false,
     resizable: false,
@@ -255,6 +314,9 @@ function createPetWindow() {
   });
   petWindow.setAlwaysOnTop(true, 'screen-saver');
   petWindow.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
+  petWindow.webContents.on('did-finish-load', () => {
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:scale', clampPetScale(ensureState().settings.petScale));
+  });
 }
 
 function createPanelWindow() {
@@ -353,6 +415,66 @@ function sendToPet(channel, payload) {
   if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send(channel, payload);
 }
 
+function broadcastState(state) {
+  for (const window of [panelWindow, chatWindow]) {
+    if (window && !window.isDestroyed()) window.webContents.send('state:changed', state);
+  }
+}
+
+function snapshotRecord(date) {
+  return normalizeRecord(ensureState().records[normalizeDateKey(date)]);
+}
+
+function calculateStreak(state) {
+  let streak = 0;
+  for (let offset = 0; offset < 3650; offset += 1) {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    const record = normalizeRecord(state.records[date.toLocaleDateString('sv-SE')]);
+    if (record.newWords >= state.settings.newWordsGoal && record.reviewWords >= state.settings.reviewWordsGoal) streak += 1;
+    else if (offset > 0) break;
+  }
+  return streak;
+}
+
+function celebrateStudy({ state, key, kind, counts, previous, undone }) {
+  const record = normalizeRecord(state.records[key]);
+  let message;
+  let mood = 'happy';
+  if (kind === 'undo') {
+    mood = 'remind';
+    if (undone && (undone.newWords || undone.reviewWords)) {
+      const parts = [];
+      if (undone.newWords) parts.push(`新词 -${undone.newWords}`);
+      if (undone.reviewWords) parts.push(`复习 -${undone.reviewWords}`);
+      message = `已撤销最近一次打卡（${parts.join('、')}），随时重新开始，喵~`;
+    } else {
+      message = '没有找到可以撤销的打卡记录，喵~';
+    }
+  } else {
+    const parts = [];
+    if (kind === 'set') {
+      if (counts?.newWords !== null && counts?.newWords !== undefined) parts.push(`新词 ${record.newWords}`);
+      if (counts?.reviewWords !== null && counts?.reviewWords !== undefined) parts.push(`复习 ${record.reviewWords}`);
+      message = `已更新${key === todayKey() ? '今天' : key}：${parts.join('、')}`;
+    } else {
+      if (counts?.newWords) parts.push(`新词 +${counts.newWords}`);
+      if (counts?.reviewWords) parts.push(`复习 +${counts.reviewWords}`);
+      message = `打卡成功：${parts.join('、')}`;
+    }
+    const crossedGoal = (current, before, goal) => goal > 0 && current >= goal && before < goal;
+    if (crossedGoal(record.newWords, previous.newWords, state.settings.newWordsGoal) && crossedGoal(record.reviewWords, previous.reviewWords, state.settings.reviewWordsGoal)) {
+      message += `，今日目标全部达成，已连续打卡 ${calculateStreak(state)} 天！🎉`;
+    } else if (crossedGoal(record.newWords, previous.newWords, state.settings.newWordsGoal)) {
+      message += '，新词目标达成！🎉';
+    } else if (crossedGoal(record.reviewWords, previous.reviewWords, state.settings.reviewWordsGoal)) {
+      message += '，复习目标达成！🎉';
+    }
+  }
+  sendToPet('pet:bubble', { text: message, mood });
+  if (panelWindow && !panelWindow.isDestroyed()) panelWindow.webContents.send('panel:toast', message);
+}
+
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'cat-icon.png'));
   tray = new Tray(icon);
@@ -387,28 +509,55 @@ app.on('before-quit', () => {
 });
 
 ipcMain.handle('state:load', () => ensureState());
-ipcMain.handle('state:save', (_event, state) => {
+ipcMain.handle('settings:save', (_event, settings) => {
   const current = ensureState();
-  const safeState = {
+  const next = {
     settings: {
       ...current.settings,
-      newWordsGoal: clampInteger(state?.settings?.newWordsGoal, 0, 500, current.settings.newWordsGoal),
-      reviewWordsGoal: clampInteger(state?.settings?.reviewWordsGoal, 0, 500, current.settings.reviewWordsGoal),
-      stepfunApiKey: typeof state?.settings?.stepfunApiKey === 'string' ? state.settings.stepfunApiKey.trim() : current.settings.stepfunApiKey,
-      stepfunModel: typeof state?.settings?.stepfunModel === 'string' && state.settings.stepfunModel.trim() ? state.settings.stepfunModel.trim() : current.settings.stepfunModel,
-      stepfunEndpoint: normalizeEndpoint(state?.settings?.stepfunEndpoint, current.settings.stepfunEndpoint)
+      newWordsGoal: clampInteger(settings?.newWordsGoal, 0, 500, current.settings.newWordsGoal),
+      reviewWordsGoal: clampInteger(settings?.reviewWordsGoal, 0, 500, current.settings.reviewWordsGoal),
+      stepfunApiKey: typeof settings?.stepfunApiKey === 'string' ? settings.stepfunApiKey.trim() : current.settings.stepfunApiKey,
+      petScale: clampPetScale(settings?.petScale ?? current.settings.petScale),
+      stepfunModel: typeof settings?.stepfunModel === 'string' && settings.stepfunModel.trim() ? settings.stepfunModel.trim() : current.settings.stepfunModel,
+      stepfunEndpoint: normalizeEndpoint(settings?.stepfunEndpoint, current.settings.stepfunEndpoint)
     },
-    records: normalizeRecords(state?.records && typeof state.records === 'object' ? state.records : current.records),
-    studyEvents: normalizeStudyEvents(state?.studyEvents && typeof state.studyEvents === 'object' ? state.studyEvents : current.studyEvents)
+    records: current.records,
+    studyEvents: current.studyEvents
   };
-  saveState(safeState);
-  return true;
+  saveState(next);
+  return next;
 });
-ipcMain.handle('study:record', (_event, counts) => adjustStudyRecord(counts));
-ipcMain.handle('study:set', (_event, counts) => setStudyRecord(counts));
-ipcMain.handle('study:undo', (_event, date) => undoStudyRecord(date));
-ipcMain.handle('study:undo-new', (_event, date) => undoLastNewWord(date));
-ipcMain.handle('study:undo-review', (_event, date) => undoLastReviewWord(date));
+ipcMain.handle('study:record', (_event, counts) => {
+  const previous = snapshotRecord(counts?.date);
+  const state = adjustStudyRecord(counts);
+  broadcastState(state);
+  if (counts?.viaChat) celebrateStudy({ state, key: normalizeDateKey(counts?.date), kind: 'record', counts, previous });
+  return state;
+});
+ipcMain.handle('study:set', (_event, counts) => {
+  const previous = snapshotRecord(counts?.date);
+  const state = setStudyRecord(counts);
+  broadcastState(state);
+  if (counts?.viaChat) celebrateStudy({ state, key: normalizeDateKey(counts?.date), kind: 'set', counts, previous });
+  return state;
+});
+ipcMain.handle('study:undo', (_event, payload) => {
+  const date = typeof payload === 'string' ? payload : payload?.date;
+  const { state, undone } = undoStudyRecord(date);
+  broadcastState(state);
+  if (payload?.viaChat) celebrateStudy({ state, key: normalizeDateKey(date), kind: 'undo', undone });
+  return state;
+});
+ipcMain.handle('study:undo-new', (_event, date) => {
+  const state = undoLastNewWord(date);
+  broadcastState(state);
+  return state;
+});
+ipcMain.handle('study:undo-review', (_event, date) => {
+  const state = undoLastReviewWord(date);
+  broadcastState(state);
+  return state;
+});
 ipcMain.handle('panel:show', createPanelWindow);
 ipcMain.handle('chat:show', createChatWindow);
 ipcMain.handle('cat:personality', () => {
@@ -421,22 +570,29 @@ ipcMain.handle('cat:personality', () => {
 });
 ipcMain.on('pet:context-menu', () => {
   if (!petWindow || petWindow.isDestroyed()) return;
+  const scale = clampPetScale(ensureState().settings.petScale);
+  const sizeItem = (label, value) => ({
+    label,
+    type: 'checkbox',
+    checked: Math.abs(scale - value) < 0.001,
+    click: () => applyPetScale(value)
+  });
   Menu.buildFromTemplate([
     { label: '打开打卡面板', click: createPanelWindow },
     { label: '打开聊天面板', click: createChatWindow },
+    {
+      label: '大小',
+      submenu: [
+        sizeItem('小（75%）', 0.75),
+        sizeItem('默认（100%）', 1),
+        sizeItem('大（125%）', 1.25),
+        sizeItem('特大（150%）', 1.5)
+      ]
+    },
     { type: 'separator' },
     { label: '最小化桌宠', click: () => petWindow.hide() },
     { label: '退出', click: () => { quitRequested = true; app.quit(); } }
   ]).popup({ window: petWindow });
-});
-ipcMain.handle('pet:get-position', () => {
-  if (!petWindow || petWindow.isDestroyed()) return { x: 0, y: 0 };
-  const [x, y] = petWindow.getPosition();
-  return { x, y };
-});
-ipcMain.on('pet:move', (_event, { x, y } = {}) => {
-  if (!petWindow || petWindow.isDestroyed() || !Number.isFinite(x) || !Number.isFinite(y)) return;
-  petWindow.setPosition(Math.round(x), Math.round(y), false);
 });
 function stopPetDrag() {
   dragAnchor = null;
@@ -468,6 +624,10 @@ ipcMain.on('pet:drag-end', stopPetDrag);
 ipcMain.on('pet:set-ignore-mouse', (_event, ignore) => {
   if (!petWindow || petWindow.isDestroyed()) return;
   petWindow.setIgnoreMouseEvents(Boolean(ignore), { forward: true });
+});
+ipcMain.on('pet:scale-step', (_event, delta) => {
+  const current = clampPetScale(ensureState().settings.petScale);
+  applyPetScale(current + Number(delta) * 0.05);
 });
 ipcMain.handle('chat:send', async (_event, { messages, settings } = {}) => {
   const current = ensureState();
