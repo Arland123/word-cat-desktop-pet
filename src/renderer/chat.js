@@ -7,6 +7,33 @@ const stopButton = document.getElementById('chat-stop');
 let state = null;
 let personality = '';
 let messages = [];
+let liveEl = null;
+let liveText = '';
+let liveMode = '';
+
+function clearLive() {
+  liveEl?.remove();
+  liveEl = null;
+  liveText = '';
+  liveMode = '';
+}
+
+function ensureLiveEl() {
+  if (!liveEl) {
+    liveEl = document.createElement('article');
+    liveEl.className = 'message assistant live';
+    list.appendChild(liveEl);
+  }
+  return liveEl;
+}
+
+api.onChatDelta?.((delta) => {
+  liveText += delta;
+  if (!liveMode) liveMode = liveText.trimStart().startsWith('{') ? 'json' : 'text';
+  const el = ensureLiveEl();
+  el.textContent = liveMode === 'text' ? window.chatActions.stripMarkdown(liveText) : '处理打卡操作中…';
+  list.scrollTop = list.scrollHeight;
+});
 
 function dateKey(date = new Date()) { return date.toLocaleDateString('sv-SE'); }
 function keyFromOffset(offset) { const date = new Date(); date.setDate(date.getDate() - offset); return dateKey(date); }
@@ -54,17 +81,22 @@ async function sendChatMessage(event) {
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
   stopButton.hidden = false;
+  ensureLiveEl().textContent = '思考中…';
   try {
     state = await api.loadState();
     personality = await api.loadCatPersonality();
     const raw = await api.sendChat({ messages: [{ role: 'system', content: personality }, { role: 'system', content: learningContext() }, { role: 'system', content: window.chatActions.modelProtocol() }, ...messages], settings: state.settings });
-    if (raw === null) return;
+    if (raw === null) {
+      if (liveMode === 'text' && liveText.trim()) messages.push({ role: 'assistant', content: window.chatActions.stripMarkdown(liveText) });
+      return;
+    }
     const result = await window.chatActions.handleModelResponse(raw, api);
     if (result.state) state = result.state;
     messages.push({ role: 'assistant', content: result.reply });
   } catch (error) {
     messages.push({ role: 'assistant', content: `暂时没连上 AI 接口：${error.message}` });
   } finally {
+    clearLive();
     button.disabled = false;
     stopButton.hidden = true;
     render();

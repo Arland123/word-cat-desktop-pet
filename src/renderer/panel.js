@@ -15,6 +15,33 @@ const recordNewCount = byId('record-new-count');
 const recordReviewCount = byId('record-review-count');
 let state = null;
 let chatMessages = [];
+let liveEl = null;
+let liveText = '';
+let liveMode = '';
+
+function clearLive() {
+  liveEl?.remove();
+  liveEl = null;
+  liveText = '';
+  liveMode = '';
+}
+
+function ensureLiveEl() {
+  if (!liveEl) {
+    liveEl = document.createElement('article');
+    liveEl.className = 'message assistant live';
+    elements.chatList.appendChild(liveEl);
+  }
+  return liveEl;
+}
+
+api.onChatDelta?.((delta) => {
+  liveText += delta;
+  if (!liveMode) liveMode = liveText.trimStart().startsWith('{') ? 'json' : 'text';
+  const el = ensureLiveEl();
+  el.textContent = liveMode === 'text' ? window.chatActions.stripMarkdown(liveText) : '处理打卡操作中…';
+  elements.chatList.scrollTop = elements.chatList.scrollHeight;
+});
 let catPersonality = '你是用户桌面上的学习小猫，主要陪伴用户完成单词打卡。请用简洁、温暖、自然的中文回复，适时提醒用户坚持单词学习；不要虚构打卡记录，也不要泄露敏感信息。';
 let toastTimer = 0;
 let modalResolver = null;
@@ -265,6 +292,7 @@ async function sendChatMessage(event) {
   const button = elements.chatForm.querySelector('button[type="submit"]');
   button.disabled = true;
   elements.chatStop.hidden = false;
+  ensureLiveEl().textContent = '思考中…';
   try {
     state = await api.loadState();
     catPersonality = await api.loadCatPersonality();
@@ -277,13 +305,17 @@ async function sendChatMessage(event) {
       ],
       settings: apiSettings()
     });
-    if (raw === null) return;
+    if (raw === null) {
+      if (liveMode === 'text' && liveText.trim()) chatMessages.push({ role: 'assistant', content: window.chatActions.stripMarkdown(liveText) });
+      return;
+    }
     const result = await window.chatActions.handleModelResponse(raw, api);
     if (result.state) state = result.state;
     chatMessages.push({ role: 'assistant', content: result.reply });
   } catch (error) {
     chatMessages.push({ role: 'assistant', content: `暂时没连上 AI 接口：${error.message}` });
   } finally {
+    clearLive();
     button.disabled = false;
     elements.chatStop.hidden = true;
     renderChat();

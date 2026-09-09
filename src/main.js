@@ -651,17 +651,47 @@ ipcMain.handle('chat:send', async (event, { messages, settings } = {}) => {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, stream: false }),
+      body: JSON.stringify({ model, messages, stream: true }),
       signal: controller.signal
     });
-    const body = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
       const detail = body?.error?.message || body?.message || body?.error?.code || JSON.stringify(body);
       throw new Error(`AI 请求失败（${response.status}）：${detail}`);
     }
-    const content = body?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') throw new Error('AI 返回内容格式异常');
-    return content;
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/event-stream')) {
+      const body = await response.json().catch(() => ({}));
+      const content = body?.choices?.[0]?.message?.content;
+      if (typeof content !== 'string') throw new Error('AI 返回内容格式异常');
+      return content;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let full = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const data = line.trim();
+        if (!data.startsWith('data:')) continue;
+        const payload = data.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          const delta = parsed?.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string' && delta) {
+            full += delta;
+            event.sender.send('chat:delta', delta);
+          }
+        } catch { /* 跳过不完整的 SSE 行 */ }
+      }
+    }
+    return full;
   } catch (error) {
     if (controller.signal.aborted) return null;
     throw error;

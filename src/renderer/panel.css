@@ -66,6 +66,8 @@ h2 { font-size: 16px; }
 .message { max-width: 84%; padding: 8px 10px; border-radius: 8px; line-height: 1.5; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 .message.user { justify-self: end; color: #234c70; background: var(--blue-soft); }
 .message.assistant { justify-self: start; color: #28543f; background: var(--green-soft); }
+.message.live::after { content: "▍"; margin-left: 2px; animation: caret-blink 1s steps(2) infinite; }
+@keyframes caret-blink { 50% { opacity: 0; } }
 .chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; border-top: 1px solid var(--line); padding-top: 11px; }
 .chat-form .stop { background: white; color: #9d3434; border: 1px solid #d9a0a5; }
 .chat-form .stop:hover { background: #fff3f2; }
