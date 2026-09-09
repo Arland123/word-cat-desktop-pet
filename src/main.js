@@ -134,6 +134,9 @@ function normalizeEndpoint(value, fallback) {
         return `https://api.stepfun.com${pathName}`;
       }
     }
+    if (!pathName || pathName === '/v1') {
+      return `${url.origin}${pathName}/chat/completions`;
+    }
     return url.toString().replace(/\/$/, '');
   } catch {
     return fallback;

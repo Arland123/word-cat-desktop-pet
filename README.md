@@ -37,7 +37,7 @@ npm start
 
 ## AI 陪聊（OpenAI 兼容接口）
 
-在面板右侧“AI 设置”填写 API Key、模型和接口地址。接口协议为 OpenAI 兼容的 chat completions，因此不限定供应商：默认（StepFun）地址为 `https://api.stepfun.com/step_plan/v1/chat/completions`、默认模型 `step-3.7-flash`；换其他供应商（如 DeepSeek、Kimi、OpenRouter）时填对方的完整 `/chat/completions` 地址、模型名和对应 Key 即可。本地模型（如 Ollama）也可以用 `http://localhost` 或 `http://127.0.0.1` 地址（本机地址允许 http，其他地址要求 https）。也可以在启动前设置 `AI_API_KEY` 环境变量（旧的 `STEPFUN_API_KEY` 仍然有效）。API 请求由 Electron 主进程发出，聊天记录仅保存在当前会话内。旧配置里的 `stepfunApiKey` 等字段会在启动时自动迁移到新字段，无需手动处理。
+在面板右侧“AI 设置”填写 API Key、模型和接口地址。接口协议为 OpenAI 兼容的 chat completions，因此不限定供应商：默认（StepFun）地址为 `https://api.stepfun.com/step_plan/v1/chat/completions`、默认模型 `step-3.7-flash`。换其他供应商（如 DeepSeek、Kimi、OpenRouter）时填对方的接口地址、模型名和对应 Key 即可；地址填基础地址（为空或以 `/v1` 结尾）时程序会自动补全 `/chat/completions`，填完整地址则原样使用。本地模型（如 Ollama）也可以用 `http://localhost` 或 `http://127.0.0.1` 地址（本机地址允许 http，其他地址要求 https）。也可以在启动前设置 `AI_API_KEY` 环境变量（旧的 `STEPFUN_API_KEY` 仍然有效）。API 请求由 Electron 主进程发出，聊天记录仅保存在当前会话内。旧配置里的 `stepfunApiKey` 等字段会在启动时自动迁移到新字段，无需手动处理。
 
 小猫的聊天人格设定保存在项目根目录的 `cat-personality.md`。直接编辑该文件即可调整身份、语气和提醒规则；开发模式（`npm start`）下保存后发送下一条消息即可生效。注意：打包版把该文件打包进了 `app.asar`，修改后需要重新执行 `npm run dist` 才能在打包版里生效。
 
