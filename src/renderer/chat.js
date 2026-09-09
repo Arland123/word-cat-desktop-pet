@@ -60,7 +60,7 @@ async function sendChatMessage(event) {
     if (result.state) state = result.state;
     messages.push({ role: 'assistant', content: result.reply });
   } catch (error) {
-    messages.push({ role: 'assistant', content: `暂时没连上 StepFun：${error.message}` });
+    messages.push({ role: 'assistant', content: `暂时没连上 AI 接口：${error.message}` });
   } finally {
     button.disabled = false;
     render();

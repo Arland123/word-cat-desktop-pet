@@ -23,9 +23,9 @@ const defaultState = {
     newWordsGoal: 10,
     reviewWordsGoal: 20,
     petScale: 1,
-    stepfunApiKey: '',
-    stepfunModel: 'step-3.7-flash',
-    stepfunEndpoint: 'https://api.stepfun.com/step_plan/v1/chat/completions'
+    aiApiKey: '',
+    aiModel: 'step-3.7-flash',
+    aiEndpoint: 'https://api.stepfun.com/step_plan/v1/chat/completions'
   },
   records: {},
   studyEvents: {}
@@ -57,11 +57,16 @@ function ensureState() {
     };
     settings.newWordsGoal = clampInteger(settings.newWordsGoal, 0, 500, defaultState.settings.newWordsGoal);
     settings.reviewWordsGoal = clampInteger(settings.reviewWordsGoal, 0, 500, defaultState.settings.reviewWordsGoal);
-    settings.stepfunApiKey = typeof settings.stepfunApiKey === 'string' ? settings.stepfunApiKey.trim() : '';
+    const legacyApiKey = typeof (legacySettings.aiApiKey ?? legacySettings.stepfunApiKey) === 'string' ? (legacySettings.aiApiKey ?? legacySettings.stepfunApiKey).trim() : '';
+    settings.aiApiKey = legacyApiKey;
+    const legacyModel = legacySettings.aiModel ?? legacySettings.stepfunModel;
+    settings.aiModel = typeof legacyModel === 'string' && legacyModel.trim() ? legacyModel.trim() : defaultState.settings.aiModel;
+    if (settings.aiModel === 'step-1-8k' || settings.aiModel === 'step-3.5-flash') settings.aiModel = defaultState.settings.aiModel;
+    settings.aiEndpoint = normalizeEndpoint(legacySettings.aiEndpoint ?? legacySettings.stepfunEndpoint, defaultState.settings.aiEndpoint);
     settings.petScale = clampPetScale(legacySettings.petScale ?? defaultState.settings.petScale);
-    settings.stepfunModel = typeof settings.stepfunModel === 'string' && settings.stepfunModel.trim() ? settings.stepfunModel.trim() : defaultState.settings.stepfunModel;
-    if (settings.stepfunModel === 'step-1-8k' || settings.stepfunModel === 'step-3.5-flash') settings.stepfunModel = defaultState.settings.stepfunModel;
-    settings.stepfunEndpoint = normalizeEndpoint(settings.stepfunEndpoint, defaultState.settings.stepfunEndpoint);
+    delete settings.stepfunApiKey;
+    delete settings.stepfunModel;
+    delete settings.stepfunEndpoint;
     const normalized = {
       settings,
       records: normalizeRecords(loaded.records),
@@ -118,7 +123,8 @@ function normalizeStudyEvents(events) {
 function normalizeEndpoint(value, fallback) {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:') return fallback;
+    const isLocal = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLocal)) return fallback;
     const pathName = url.pathname.replace(/\/+$/, '');
     if (url.hostname === 'api.stepfun.com') {
       if (!pathName || pathName === '/step_plan' || pathName === '/step_plan/v1') {
@@ -516,10 +522,10 @@ ipcMain.handle('settings:save', (_event, settings) => {
       ...current.settings,
       newWordsGoal: clampInteger(settings?.newWordsGoal, 0, 500, current.settings.newWordsGoal),
       reviewWordsGoal: clampInteger(settings?.reviewWordsGoal, 0, 500, current.settings.reviewWordsGoal),
-      stepfunApiKey: typeof settings?.stepfunApiKey === 'string' ? settings.stepfunApiKey.trim() : current.settings.stepfunApiKey,
+      aiApiKey: typeof settings?.aiApiKey === 'string' ? settings.aiApiKey.trim() : current.settings.aiApiKey,
       petScale: clampPetScale(settings?.petScale ?? current.settings.petScale),
-      stepfunModel: typeof settings?.stepfunModel === 'string' && settings.stepfunModel.trim() ? settings.stepfunModel.trim() : current.settings.stepfunModel,
-      stepfunEndpoint: normalizeEndpoint(settings?.stepfunEndpoint, current.settings.stepfunEndpoint)
+      aiModel: typeof settings?.aiModel === 'string' && settings.aiModel.trim() ? settings.aiModel.trim() : current.settings.aiModel,
+      aiEndpoint: normalizeEndpoint(settings?.aiEndpoint, current.settings.aiEndpoint)
     },
     records: current.records,
     studyEvents: current.studyEvents
@@ -631,10 +637,10 @@ ipcMain.on('pet:scale-step', (_event, delta) => {
 });
 ipcMain.handle('chat:send', async (_event, { messages, settings } = {}) => {
   const current = ensureState();
-  const apiKey = (settings?.stepfunApiKey || current.settings.stepfunApiKey || process.env.STEPFUN_API_KEY || '').trim();
-  if (!apiKey) throw new Error('请先在设置中填写 StepFun API Key，或设置 STEPFUN_API_KEY 环境变量');
-  const endpoint = normalizeEndpoint(settings?.stepfunEndpoint, current.settings.stepfunEndpoint);
-  const model = settings?.stepfunModel?.trim() || current.settings.stepfunModel;
+  const apiKey = (settings?.aiApiKey || current.settings.aiApiKey || process.env.AI_API_KEY || process.env.STEPFUN_API_KEY || '').trim();
+  if (!apiKey) throw new Error('请先在设置中填写 API Key，或设置 AI_API_KEY 环境变量');
+  const endpoint = normalizeEndpoint(settings?.aiEndpoint, current.settings.aiEndpoint);
+  const model = settings?.aiModel?.trim() || current.settings.aiModel;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -643,9 +649,9 @@ ipcMain.handle('chat:send', async (_event, { messages, settings } = {}) => {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = body?.error?.message || body?.message || body?.error?.code || JSON.stringify(body);
-    throw new Error(`StepFun 请求失败（${response.status}）：${detail}`);
+    throw new Error(`AI 请求失败（${response.status}）：${detail}`);
   }
   const content = body?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') throw new Error('StepFun 返回内容格式异常');
+  if (typeof content !== 'string') throw new Error('AI 返回内容格式异常');
   return content;
 });

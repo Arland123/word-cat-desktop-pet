@@ -207,7 +207,7 @@ elements.settingsForm.addEventListener('submit', async (event) => {
 });
 
 function apiSettings() {
-  return { stepfunApiKey: elements.apiKey.value.trim(), stepfunModel: elements.model.value.trim(), stepfunEndpoint: elements.endpoint.value.trim() };
+  return { aiApiKey: elements.apiKey.value.trim(), aiModel: elements.model.value.trim(), aiEndpoint: elements.endpoint.value.trim() };
 }
 
 function learningContext() {
@@ -233,7 +233,7 @@ elements.apiForm.addEventListener('submit', async (event) => {
   if (!elements.model.value.trim() || !elements.endpoint.value.trim()) return toast('请填写模型和接口地址');
   try {
     state = await api.saveSettings(apiSettings());
-    toast('StepFun 设置已保存');
+    toast('AI 设置已保存');
   } catch (error) {
     toast(error.message || '保存失败，请稍后重试');
   }
@@ -280,7 +280,7 @@ async function sendChatMessage(event) {
     if (result.state) state = result.state;
     chatMessages.push({ role: 'assistant', content: result.reply });
   } catch (error) {
-    chatMessages.push({ role: 'assistant', content: `暂时没连上 StepFun：${error.message}` });
+    chatMessages.push({ role: 'assistant', content: `暂时没连上 AI 接口：${error.message}` });
   } finally {
     button.disabled = false;
     renderChat();
@@ -319,9 +319,9 @@ setInterval(() => {
   }
   elements.newGoal.value = state.settings.newWordsGoal;
   elements.reviewGoal.value = state.settings.reviewWordsGoal;
-  elements.apiKey.value = state.settings.stepfunApiKey || '';
-  elements.model.value = state.settings.stepfunModel || 'step-3.7-flash';
-  elements.endpoint.value = state.settings.stepfunEndpoint || 'https://api.stepfun.com/step_plan/v1/chat/completions';
+  elements.apiKey.value = state.settings.aiApiKey || '';
+  elements.model.value = state.settings.aiModel || 'step-3.7-flash';
+  elements.endpoint.value = state.settings.aiEndpoint || 'https://api.stepfun.com/step_plan/v1/chat/completions';
   render();
   renderChat();
 })();
