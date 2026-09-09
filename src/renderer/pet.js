@@ -59,7 +59,7 @@ function progressMessage() {
   const reviewRemaining = Math.max(0, state.settings.reviewWordsGoal - record.reviewWords);
   if (!newRemaining && !reviewRemaining) return { text: '今天目标全部完成，喵~', mood: 'happy' };
   if (!record.newWords && !record.reviewWords) return { text: '还没打卡哦，记一个新词吧', mood: 'remind' };
-  return { text: `还差新词 ${newRemaining}、复习 ${reviewRemaining}，喵~`, mood: newRemaining + reviewRemaining <= 3 ? 'happy' : 'remind' };
+  return { text: `已学新词 ${record.newWords}、复习 ${record.reviewWords}，喵~`, mood: newRemaining + reviewRemaining <= 3 ? 'happy' : 'remind' };
 }
 
 cat.addEventListener('pointerdown', (event) => {
