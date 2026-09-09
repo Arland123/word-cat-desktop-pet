@@ -8,6 +8,22 @@ let dragState = null;
 let suppressClick = false;
 const hitCanvas = document.createElement('canvas');
 const hitContext = hitCanvas.getContext('2d', { willReadFrequently: true });
+const appearances = {
+  work: { src: '../../assets/cat-work.png', label: '工作喵' },
+  sleep: { src: '../../assets/cat-sleep.png', label: '睡觉喵' },
+  daze: { src: '../../assets/cat-pet.png', label: '发呆喵' }
+};
+
+function applyAppearance(value) {
+  const key = Object.hasOwn(appearances, value) ? value : 'daze';
+  const appearance = appearances[key];
+  cat.dataset.appearance = key;
+  catImage.alt = `${appearance.label}桌宠`;
+  hitCanvas.width = 0;
+  hitCanvas.height = 0;
+  if (!catImage.src.endsWith(appearance.src.replace('../..', ''))) catImage.src = appearance.src;
+  if (catImage.complete && catImage.naturalWidth) prepareHitTest();
+}
 
 function prepareHitTest() {
   if (!catImage.naturalWidth) return;
@@ -131,6 +147,10 @@ window.catApi.onPetScale?.((scale) => {
   const value = Number(scale);
   if (Number.isFinite(value) && value > 0) document.body.style.zoom = String(value);
 });
+window.catApi.onPetAppearance?.((appearance) => {
+  applyAppearance(appearance);
+  showBubble(`换成${appearances[appearance]?.label ?? appearances.daze.label}啦`, 'happy');
+});
 document.addEventListener('wheel', (event) => {
   if (!event.ctrlKey || !hitTest(event)) return;
   event.preventDefault();
@@ -138,8 +158,8 @@ document.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 (async () => {
-  if (catImage.complete) prepareHitTest();
-  else catImage.addEventListener('load', prepareHitTest, { once: true });
+  catImage.addEventListener('load', prepareHitTest);
   state = await window.catApi.loadState();
+  applyAppearance(state?.settings?.petAppearance);
   showBubble('喵，今天也要加油！', 'happy');
 })();

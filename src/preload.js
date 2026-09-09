@@ -24,5 +24,6 @@ contextBridge.exposeInMainWorld('catApi', {
   stopPetDrag: () => ipcRenderer.send('pet:drag-end'),
   setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore),
   onPetScale: (callback) => ipcRenderer.on('pet:scale', (_event, scale) => callback(scale)),
+  onPetAppearance: (callback) => ipcRenderer.on('pet:appearance', (_event, appearance) => callback(appearance)),
   stepPetScale: (delta) => ipcRenderer.send('pet:scale-step', delta)
 });

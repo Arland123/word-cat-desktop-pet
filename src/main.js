@@ -23,6 +23,7 @@ const defaultState = {
     newWordsGoal: 10,
     reviewWordsGoal: 20,
     petScale: 1,
+    petAppearance: 'daze',
     reminderEnabled: true,
     reminderStart: '09:00',
     reminderEnd: '22:00',
@@ -40,11 +41,20 @@ const PET_BASE_WIDTH = 270;
 const PET_BASE_HEIGHT = 420;
 const PET_RIGHT_MARGIN = 60;
 const PET_BOTTOM_MARGIN = 90;
+const PET_APPEARANCES = {
+  work: '工作喵',
+  sleep: '睡觉喵',
+  daze: '发呆喵'
+};
 
 function clampPetScale(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 1;
   return Math.round(Math.min(2, Math.max(0.5, number)) * 100) / 100;
+}
+
+function normalizePetAppearance(value) {
+  return Object.hasOwn(PET_APPEARANCES, value) ? value : defaultState.settings.petAppearance;
 }
 
 function ensureState() {
@@ -71,6 +81,7 @@ function ensureState() {
     if (settings.aiModel === 'step-1-8k' || settings.aiModel === 'step-3.5-flash') settings.aiModel = defaultState.settings.aiModel;
     settings.aiEndpoint = normalizeEndpoint(legacySettings.aiEndpoint ?? legacySettings.stepfunEndpoint, defaultState.settings.aiEndpoint);
     settings.petScale = clampPetScale(legacySettings.petScale ?? defaultState.settings.petScale);
+    settings.petAppearance = normalizePetAppearance(legacySettings.petAppearance);
     settings.reminderEnabled = typeof legacySettings.reminderEnabled === 'boolean' ? legacySettings.reminderEnabled : defaultState.settings.reminderEnabled;
     settings.reminderStart = normalizeTime(legacySettings.reminderStart, defaultState.settings.reminderStart);
     settings.reminderEnd = normalizeTime(legacySettings.reminderEnd, defaultState.settings.reminderEnd);
@@ -342,6 +353,15 @@ function applyPetScale(value) {
   return scale;
 }
 
+function applyPetAppearance(value) {
+  const appearance = normalizePetAppearance(value);
+  const state = ensureState();
+  state.settings.petAppearance = appearance;
+  saveState(state);
+  sendToPet('pet:appearance', appearance);
+  return appearance;
+}
+
 function createPetWindow() {
   const scale = clampPetScale(ensureState().settings.petScale);
   const bounds = petBoundsFor(scale);
@@ -367,7 +387,10 @@ function createPetWindow() {
   petWindow.setAlwaysOnTop(true, 'screen-saver');
   petWindow.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
   petWindow.webContents.on('did-finish-load', () => {
-    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:scale', clampPetScale(ensureState().settings.petScale));
+    if (!petWindow || petWindow.isDestroyed()) return;
+    const settings = ensureState().settings;
+    petWindow.webContents.send('pet:scale', clampPetScale(settings.petScale));
+    petWindow.webContents.send('pet:appearance', normalizePetAppearance(settings.petAppearance));
   });
 }
 
@@ -632,6 +655,7 @@ ipcMain.handle('settings:save', (_event, settings) => {
       reviewWordsGoal: clampInteger(settings?.reviewWordsGoal, 0, 500, current.settings.reviewWordsGoal),
       aiApiKey: typeof settings?.aiApiKey === 'string' ? settings.aiApiKey.trim() : current.settings.aiApiKey,
       petScale: clampPetScale(settings?.petScale ?? current.settings.petScale),
+      petAppearance: normalizePetAppearance(settings?.petAppearance ?? current.settings.petAppearance),
       aiModel: typeof settings?.aiModel === 'string' && settings.aiModel.trim() ? settings.aiModel.trim() : current.settings.aiModel,
       aiEndpoint: normalizeEndpoint(settings?.aiEndpoint, current.settings.aiEndpoint),
       reminderEnabled: typeof settings?.reminderEnabled === 'boolean' ? settings.reminderEnabled : current.settings.reminderEnabled,
@@ -695,9 +719,24 @@ ipcMain.on('pet:context-menu', () => {
     checked: Math.abs(scale - value) < 0.001,
     click: () => applyPetScale(value)
   });
+  const appearance = normalizePetAppearance(ensureState().settings.petAppearance);
+  const appearanceItem = (value) => ({
+    label: PET_APPEARANCES[value],
+    type: 'radio',
+    checked: appearance === value,
+    click: () => applyPetAppearance(value)
+  });
   Menu.buildFromTemplate([
     { label: '打开打卡面板', click: createPanelWindow },
     { label: '打开聊天面板', click: createChatWindow },
+    {
+      label: '选择形象',
+      submenu: [
+        appearanceItem('work'),
+        appearanceItem('sleep'),
+        appearanceItem('daze')
+      ]
+    },
     {
       label: '大小',
       submenu: [

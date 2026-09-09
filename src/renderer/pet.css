@@ -30,9 +30,12 @@ body {
   cursor: grab;
 }
 
+#cat[data-appearance="work"] { width: 260px; }
+#cat[data-appearance="sleep"] { width: 244px; }
+
 #cat:active { cursor: grabbing; }
 
-#cat-image { display: block; width: 236px; height: auto; pointer-events: none; transform-origin: 50% 100%; }
+#cat-image { display: block; width: 100%; height: auto; pointer-events: none; transform-origin: 50% 100%; }
 
 #cat.idle #cat-image { animation: breathe 3s ease-in-out infinite; }
 #cat.remind #cat-image { animation: jump .8s cubic-bezier(.25, .8, .35, 1) 2; }
