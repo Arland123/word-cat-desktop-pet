@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -23,6 +23,10 @@ const defaultState = {
     newWordsGoal: 10,
     reviewWordsGoal: 20,
     petScale: 1,
+    reminderEnabled: true,
+    reminderStart: '09:00',
+    reminderEnd: '22:00',
+    reminderInterval: 60,
     aiApiKey: '',
     aiModel: 'step-3.7-flash',
     aiEndpoint: 'https://api.stepfun.com/step_plan/v1/chat/completions'
@@ -64,6 +68,10 @@ function ensureState() {
     if (settings.aiModel === 'step-1-8k' || settings.aiModel === 'step-3.5-flash') settings.aiModel = defaultState.settings.aiModel;
     settings.aiEndpoint = normalizeEndpoint(legacySettings.aiEndpoint ?? legacySettings.stepfunEndpoint, defaultState.settings.aiEndpoint);
     settings.petScale = clampPetScale(legacySettings.petScale ?? defaultState.settings.petScale);
+    settings.reminderEnabled = typeof legacySettings.reminderEnabled === 'boolean' ? legacySettings.reminderEnabled : defaultState.settings.reminderEnabled;
+    settings.reminderStart = normalizeTime(legacySettings.reminderStart, defaultState.settings.reminderStart);
+    settings.reminderEnd = normalizeTime(legacySettings.reminderEnd, defaultState.settings.reminderEnd);
+    settings.reminderInterval = clampInteger(legacySettings.reminderInterval, 5, 720, defaultState.settings.reminderInterval);
     delete settings.stepfunApiKey;
     delete settings.stepfunModel;
     delete settings.stepfunEndpoint;
@@ -146,6 +154,19 @@ function normalizeEndpoint(value, fallback) {
 function saveState(state) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(dataFile, JSON.stringify(state, null, 2), 'utf8');
+}
+
+const backupDir = path.join(dataDir, 'backups');
+
+function backupState(now = new Date()) {
+  try {
+    if (!fs.existsSync(dataFile)) return;
+    fs.mkdirSync(backupDir, { recursive: true });
+    const stamp = `${now.toLocaleDateString('sv-SE')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    fs.copyFileSync(dataFile, path.join(backupDir, `backup-${stamp}.json`));
+    const files = fs.readdirSync(backupDir).filter((name) => name.startsWith('backup-') && name.endsWith('.json')).sort();
+    while (files.length > 3) fs.unlinkSync(path.join(backupDir, files.shift()));
+  } catch { /* 备份失败不影响主流程 */ }
 }
 
 function todayKey() {
@@ -443,6 +464,67 @@ function sendToPet(channel, payload) {
   if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send(channel, payload);
 }
 
+const REMINDER_TEMPLATES = [
+  { tag: 'both', text: '该背单词啦，还差新词 {new} 个、复习 {review} 个，喵~' },
+  { tag: 'both', text: '目标就在眼前，新词差 {new}、复习差 {review}，加油喵！' },
+  { tag: 'new', text: '学累了吗？顺手记几个词，新词只差 {new} 个啦。' },
+  { tag: 'new', text: '坚持就是胜利，新词还差 {new} 个就达标了喵！' },
+  { tag: 'review', text: '喵，今天的复习还差 {review} 个，别忘了~' },
+  { tag: 'review', text: '复习 {review} 个就完成今天的目标啦，冲一把？' },
+  { tag: 'none', text: '今天一个词都还没记录哦，先从新词开始吧，喵~' },
+  { tag: 'none', text: '打卡还没开始哦，背几个词让我看到你的进度喵~' }
+];
+
+function buildReminderText(record, settings) {
+  const newRemaining = Math.max(0, settings.newWordsGoal - record.newWords);
+  const reviewRemaining = Math.max(0, settings.reviewWordsGoal - record.reviewWords);
+  if (!newRemaining && !reviewRemaining) return null;
+  let candidates;
+  if (!record.newWords && !record.reviewWords && settings.newWordsGoal > 0) {
+    candidates = REMINDER_TEMPLATES.filter((item) => item.tag === 'none');
+  } else if (newRemaining && reviewRemaining) {
+    candidates = REMINDER_TEMPLATES.filter((item) => item.tag !== 'none');
+  } else if (newRemaining) {
+    candidates = REMINDER_TEMPLATES.filter((item) => item.tag === 'new');
+  } else {
+    candidates = REMINDER_TEMPLATES.filter((item) => item.tag === 'review');
+  }
+  const picked = candidates[Math.floor(Math.random() * candidates.length)];
+  return picked.text.replace('{new}', String(newRemaining)).replace('{review}', String(reviewRemaining));
+}
+
+let lastReminderAt = Date.now();
+
+function reminderDue(state, now = new Date(), lastAt = lastReminderAt) {
+  const settings = state.settings;
+  if (!settings.reminderEnabled) return { due: false };
+  const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (settings.reminderStart > settings.reminderEnd) {
+    if (hhmm < settings.reminderStart && hhmm > settings.reminderEnd) return { due: false };
+  } else if (hhmm < settings.reminderStart || hhmm > settings.reminderEnd) {
+    return { due: false };
+  }
+  if (!settings.newWordsGoal && !settings.reviewWordsGoal) return { due: false };
+  const record = normalizeRecord(state.records[now.toLocaleDateString('sv-SE')]);
+  const newRemaining = Math.max(0, settings.newWordsGoal - record.newWords);
+  const reviewRemaining = Math.max(0, settings.reviewWordsGoal - record.reviewWords);
+  if (!newRemaining && !reviewRemaining) return { due: false };
+  if (Date.now() - lastAt < settings.reminderInterval * 60000) return { due: false };
+  return { due: true, newRemaining, reviewRemaining };
+}
+
+function checkReminder() {
+  try {
+    const state = ensureState();
+    if (!reminderDue(state).due) return;
+    lastReminderAt = Date.now();
+    const text = buildReminderText(normalizeRecord(state.records[todayKey()]), state.settings);
+    if (!text) return;
+    if (petWindow && !petWindow.isDestroyed() && !petWindow.isVisible()) petWindow.show();
+    sendToPet('pet:bubble', { text, mood: 'remind' });
+  } catch { /* 提醒失败不影响主流程 */ }
+}
+
 function broadcastState(state) {
   for (const window of [panelWindow, chatWindow]) {
     if (window && !window.isDestroyed()) window.webContents.send('state:changed', state);
@@ -527,6 +609,8 @@ if (!hasSingleInstanceLock) {
   createPetWindow();
   if (!launchedAtLogin) createPanelWindow();
   createTray();
+  backupState();
+  setInterval(checkReminder, 30000);
   });
 }
 
@@ -547,7 +631,11 @@ ipcMain.handle('settings:save', (_event, settings) => {
       aiApiKey: typeof settings?.aiApiKey === 'string' ? settings.aiApiKey.trim() : current.settings.aiApiKey,
       petScale: clampPetScale(settings?.petScale ?? current.settings.petScale),
       aiModel: typeof settings?.aiModel === 'string' && settings.aiModel.trim() ? settings.aiModel.trim() : current.settings.aiModel,
-      aiEndpoint: normalizeEndpoint(settings?.aiEndpoint, current.settings.aiEndpoint)
+      aiEndpoint: normalizeEndpoint(settings?.aiEndpoint, current.settings.aiEndpoint),
+      reminderEnabled: typeof settings?.reminderEnabled === 'boolean' ? settings.reminderEnabled : current.settings.reminderEnabled,
+      reminderStart: normalizeTime(settings?.reminderStart, current.settings.reminderStart),
+      reminderEnd: normalizeTime(settings?.reminderEnd, current.settings.reminderEnd),
+      reminderInterval: clampInteger(settings?.reminderInterval, 5, 720, current.settings.reminderInterval)
     },
     records: current.records,
     studyEvents: current.studyEvents
@@ -721,3 +809,17 @@ ipcMain.handle('chat:send', async (event, { messages, settings } = {}) => {
 ipcMain.on('chat:abort', (event) => {
   chatRequests.get(event.sender.id)?.abort();
 });
+ipcMain.handle('data:export', async (event) => {
+  const state = ensureState();
+  const parent = BrowserWindow.fromWebContents?.(event.sender) || panelWindow;
+  const result = await dialog.showSaveDialog(parent, {
+    title: '导出打卡数据',
+    defaultPath: `word-cat-backup-${todayKey()}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  fs.writeFileSync(result.filePath, JSON.stringify(state, null, 2), 'utf8');
+  return { saved: result.filePath };
+});
+
+module.exports = { reminderDue, buildReminderText, backupState };

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('catApi', {
   showPanel: () => ipcRenderer.invoke('panel:show'),
   showChat: () => ipcRenderer.invoke('chat:show'),
   loadCatPersonality: () => ipcRenderer.invoke('cat:personality'),
+  exportData: () => ipcRenderer.invoke('data:export'),
   sendChat: (payload) => ipcRenderer.invoke('chat:send', payload),
   abortChat: () => ipcRenderer.send('chat:abort'),
   onChatDelta: (callback) => ipcRenderer.on('chat:delta', (_event, delta) => callback(delta)),

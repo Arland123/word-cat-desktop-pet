@@ -6,6 +6,7 @@ const elements = {
   newWordButton: byId('new-word-button'), reviewWordButton: byId('review-word-button'), undoNewButton: byId('undo-new-button'), undoReviewButton: byId('undo-review-button'), history: byId('history'), toast: byId('toast'),
   refreshButton: byId('refresh-button'),
   settingsForm: byId('settings-form'), newGoal: byId('new-goal'), reviewGoal: byId('review-goal'),
+  reminderEnabled: byId('reminder-enabled'), reminderStart: byId('reminder-start'), reminderEnd: byId('reminder-end'), reminderInterval: byId('reminder-interval'), exportData: byId('export-data'),
   apiForm: byId('api-form'), apiKey: byId('api-key'), model: byId('model'), endpoint: byId('endpoint'),
   chatList: byId('chat-list'), chatForm: byId('chat-form'), chatInput: byId('chat-input'), clearChat: byId('clear-chat'), chatStop: byId('chat-stop')
 };
@@ -224,8 +225,20 @@ elements.settingsForm.addEventListener('submit', async (event) => {
     toast('请检查打卡设置');
     return;
   }
+  const reminderInterval = Number(elements.reminderInterval.value);
+  if (!Number.isInteger(reminderInterval) || reminderInterval < 5 || reminderInterval > 720) {
+    toast('提醒间隔需为 5 到 720 的整数分钟');
+    return;
+  }
   try {
-    state = await api.saveSettings({ newWordsGoal, reviewWordsGoal });
+    state = await api.saveSettings({
+      newWordsGoal,
+      reviewWordsGoal,
+      reminderEnabled: elements.reminderEnabled.checked,
+      reminderStart: elements.reminderStart.value || '09:00',
+      reminderEnd: elements.reminderEnd.value || '22:00',
+      reminderInterval
+    });
     render();
     toast('打卡设置已保存');
   } catch (error) {
@@ -331,6 +344,15 @@ elements.chatInput.addEventListener('keydown', (event) => {
 elements.chatForm.addEventListener('submit', sendChatMessage);
 elements.chatStop.addEventListener('click', () => api.abortChat());
 
+elements.exportData.addEventListener('click', async () => {
+  try {
+    const result = await api.exportData();
+    toast(result?.saved ? `已导出到 ${result.saved}` : '已取消导出');
+  } catch (error) {
+    toast(error.message || '导出失败，请稍后重试');
+  }
+});
+
 elements.clearChat.addEventListener('click', () => { chatMessages = []; renderChat(); });
 elements.refreshButton.addEventListener('click', () => refreshState(true));
 api.onStateChanged((nextState) => {
@@ -355,6 +377,10 @@ setInterval(() => {
   }
   elements.newGoal.value = state.settings.newWordsGoal;
   elements.reviewGoal.value = state.settings.reviewWordsGoal;
+  elements.reminderEnabled.checked = state.settings.reminderEnabled !== false;
+  elements.reminderStart.value = state.settings.reminderStart || '09:00';
+  elements.reminderEnd.value = state.settings.reminderEnd || '22:00';
+  elements.reminderInterval.value = state.settings.reminderInterval || 60;
   elements.apiKey.value = state.settings.aiApiKey || '';
   elements.model.value = state.settings.aiModel || 'step-3.7-flash';
   elements.endpoint.value = state.settings.aiEndpoint || 'https://api.stepfun.com/step_plan/v1/chat/completions';

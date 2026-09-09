@@ -55,7 +55,14 @@
           <form id="settings-form" class="settings">
             <label>每日新词目标<input id="new-goal" type="number" min="0" max="500" required></label>
             <label>每日复习目标<input id="review-goal" type="number" min="0" max="500" required></label>
+            <label class="check"><input id="reminder-enabled" type="checkbox"> 开启定时提醒（目标达成当天自动安静）</label>
+            <div class="time-row">
+              <label>提醒开始<input id="reminder-start" type="time"></label>
+              <label>提醒结束<input id="reminder-end" type="time"></label>
+            </div>
+            <label>提醒间隔（分钟，5–720）<input id="reminder-interval" type="number" min="5" max="720" step="5"></label>
             <button type="submit">保存学习目标</button>
+            <button id="export-data" class="ghost" type="button">导出打卡数据</button>
           </form>
         </section>
 
