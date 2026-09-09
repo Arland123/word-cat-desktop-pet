@@ -197,9 +197,14 @@ function setStudyRecord({ newWords, reviewWords, date } = {}) {
   const key = normalizeDateKey(date);
   const current = normalizeRecord(state.records[key]);
   const next = { newWords: hasNew ? values[0] : current.newWords, reviewWords: hasReview ? values[1] : current.reviewWords };
-  if (next.newWords || next.reviewWords) state.records[key] = next;
-  else delete state.records[key];
-  delete state.studyEvents[key];
+  if (next.newWords || next.reviewWords) {
+    state.records[key] = next;
+    // 重建为单条批量事件，保证撤销按钮和聊天撤销继续可用
+    state.studyEvents[key] = [{ newWords: next.newWords, reviewWords: next.reviewWords }];
+  } else {
+    delete state.records[key];
+    delete state.studyEvents[key];
+  }
   saveState(state);
   return state;
 }
@@ -241,6 +246,13 @@ function undoLastNewWord(date) {
       return state;
     }
   }
+  // 事件历史缺失（例如旧版本补录覆盖过）时仍直接回退数量
+  if (current.newWords > 0) {
+    current.newWords -= 1;
+    if (current.newWords || current.reviewWords) state.records[key] = current;
+    else delete state.records[key];
+    saveState(state);
+  }
   return state;
 }
 
@@ -263,6 +275,13 @@ function undoLastReviewWord(date) {
       saveState(state);
       return state;
     }
+  }
+  // 事件历史缺失（例如旧版本补录覆盖过）时仍直接回退数量
+  if (current.reviewWords > 0) {
+    current.reviewWords -= 1;
+    if (current.newWords || current.reviewWords) state.records[key] = current;
+    else delete state.records[key];
+    saveState(state);
   }
   return state;
 }
