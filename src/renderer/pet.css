@@ -26,20 +26,18 @@ body {
   position: relative;
   width: 236px;
   filter: drop-shadow(0 14px 16px rgba(20, 48, 85, .16));
-  transform-origin: 50% 100%;
   -webkit-app-region: no-drag;
   cursor: grab;
 }
 
 #cat:active { cursor: grabbing; }
 
-#cat.dragging { animation-play-state: paused !important; }
+#cat-image { display: block; width: 236px; height: auto; pointer-events: none; transform-origin: 50% 100%; }
 
-#cat-image { display: block; width: 236px; height: auto; pointer-events: none; }
-
-#cat.idle { animation: breathe 3s ease-in-out infinite; }
-#cat.remind { animation: jump .8s cubic-bezier(.25, .8, .35, 1) 2; }
-#cat.happy { animation: happy .9s ease 2; }
+#cat.idle #cat-image { animation: breathe 3s ease-in-out infinite; }
+#cat.remind #cat-image { animation: jump .8s cubic-bezier(.25, .8, .35, 1) 2; }
+#cat.happy #cat-image { animation: happy .9s ease 2; }
+#cat.dragging #cat-image { animation-play-state: paused !important; }
 
 #bubble {
   position: absolute;
