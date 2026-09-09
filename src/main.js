@@ -36,7 +36,10 @@ const defaultState = {
 };
 
 const PET_BASE_WIDTH = 270;
-const PET_BASE_HEIGHT = 290;
+// 高度需要给耳朵高度锚定的气泡留出向上生长的空间
+const PET_BASE_HEIGHT = 420;
+const PET_RIGHT_MARGIN = 60;
+const PET_BOTTOM_MARGIN = 90;
 
 function clampPetScale(value) {
   const number = Number(value);
@@ -311,12 +314,12 @@ function petBoundsFor(scale, anchor) {
   const width = Math.round(PET_BASE_WIDTH * scale);
   const height = Math.round(PET_BASE_HEIGHT * scale);
   const workArea = screen.getPrimaryDisplay().workArea;
-  const base = anchor || { x: workArea.x + workArea.width - 330, y: workArea.y + workArea.height - 380, width: PET_BASE_WIDTH, height: PET_BASE_HEIGHT };
+  const base = anchor || { right: workArea.x + workArea.width - PET_RIGHT_MARGIN, bottom: workArea.y + workArea.height - PET_BOTTOM_MARGIN };
   return {
     width,
     height,
-    x: Math.round(base.x + base.width / 2 - width / 2),
-    y: Math.round(base.y + base.height - height)
+    x: Math.round(base.right - width),
+    y: Math.round(base.bottom - height)
   };
 }
 
@@ -332,7 +335,7 @@ function applyPetScale(value) {
   if (petWindow && !petWindow.isDestroyed()) {
     const [currentX, currentY] = petWindow.getPosition();
     const [currentWidth, currentHeight] = petWindow.getSize();
-    const next = petBoundsFor(scale, { x: currentX, y: currentY, width: currentWidth, height: currentHeight });
+    const next = petBoundsFor(scale, { right: currentX + currentWidth, bottom: currentY + currentHeight });
     petWindow.setBounds(next);
     petWindow.webContents.send('pet:scale', scale);
   }
