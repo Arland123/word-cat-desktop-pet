@@ -1,6 +1,6 @@
 {
   "name": "word-cat-desktop-pet",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A desktop cat that reminds you to practice vocabulary.",
   "main": "src/main.js",
   "scripts": {

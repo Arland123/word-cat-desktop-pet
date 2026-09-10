@@ -1,23 +1,29 @@
 # 单词猫咪桌宠
 
-基于 Electron 的 Windows 桌宠应用。白色小猫会置顶显示在桌面，帮助你记录每日新词和复习。
+基于 Electron 的 Windows 桌宠应用。一只白色小猫会置顶显示在桌面，陪你记录每天的新词和复习。
 
-## 启动
+![发呆喵](docs/screenshot-pet.png)
 
-双击：
+## 下载安装（普通用户看这里）
 
-```bat
-start.bat
-```
+1. 前往 [Releases 页面](https://github.com/Arland123/word-cat-desktop-pet/releases)；
+2. 在最新版本的 Assets 里下载 `word-cat-desktop-pet-<版本号>.exe`（免安装便携版）；
+3. 双击运行，小猫会出现在桌面右下角，开始打卡吧！
 
-或在终端运行：
+- 系统要求：Windows 10 / 11（x64）。
+- 首次运行如遇 SmartScreen 提示“未知发布者”，点击“更多信息”→“仍要运行”（应用未做代码签名）。
+- 数据全部保存在本机，删除程序不会自动删除打卡数据。
 
-```bat
-npm install
-npm start
-```
+## 快速上手
 
-需要安装 Node.js 和 npm。
+1. 右键小猫 → **打开打卡面板**；
+2. 在右侧“AI 设置”里填入 API Key、模型和接口地址（见下文 [AI 陪聊](#ai-陪聊openai-兼容接口)），点击“保存 AI 设置”；
+3. 在“打卡设置”里设定每日新词/复习目标，点击“保存学习目标”；
+4. 点击“记录一个新词”，或者直接对猫咪说“记 3 个新词”；
+5. 右键小猫可以**选择形象**（工作喵/睡觉喵/发呆喵）和调整**大小**；悬停在猫身上按住 Ctrl 滚轮可微调大小。
+
+![打卡面板](docs/screenshot-panel.png)
+![AI 设置与最近 14 天记录](docs/screenshot-panel-ai.png)
 
 ## 功能
 
@@ -36,7 +42,19 @@ npm start
 - 右键小猫可打开独立的小型聊天面板，自动避开桌宠位置
 - 关闭面板只是隐藏，猫咪仍会留在桌面
 - Windows 登录后自动启动桌宠；开机启动时不会自动打开大面板
-- 数据保存在 Electron 用户数据目录中；首次读取旧版 `data/state.json` 时会自动迁移字段格式。
+
+## 从源码运行（开发者）
+
+需要 Node.js（建议 18 及以上）和 npm：
+
+```bat
+git clone https://github.com/Arland123/word-cat-desktop-pet.git
+cd word-cat-desktop-pet
+npm install
+npm start
+```
+
+双击 `start.bat` 等效于 `npm start`（需先完成 `npm install`）。打包便携版：`npm run dist`，产物在 `dist\` 目录；也可以直接推送一个 `v*` 标签到 GitHub，Actions 会自动构建并发布 Release（见 `.github/workflows/release.yml`）。
 
 ## AI 陪聊（OpenAI 兼容接口）
 
@@ -58,3 +76,18 @@ npm start
 - 记录历史日期时可说 `前天复习 20 个词`、`记录 2026年9月1日的新词 3 个`
 
 指令执行后会立即保存到指定日期并刷新面板；普通聊天不会因为提到“新词”而自动修改数据。执行这些指令需要已配置 API Key。
+
+## 数据与隐私
+
+- 打卡数据只保存在本机 `%APPDATA%\word-cat-desktop-pet\word-cat\state.json`；GitHub 仓库和发布程序均不包含任何用户数据或密钥。
+- 应用唯一的网络请求是聊天：每次对话会把当日学习统计（数量、目标、连续天数、近 7 天记录）发送给你配置的 AI 服务商，不包含 API Key 和其他个人信息。除聊天外没有任何遥测或上报。
+- 启动时自动滚动备份最近 3 份到同目录 `backups\`；“导出打卡数据”可随时导出完整 JSON。
+- 彻底卸载：托盘菜单退出应用后，删除上述用户数据目录；再在 Windows“设置 → 应用 → 启动”里关闭 `word-cat-desktop-pet` 的开机自启。
+
+## 常见问题
+
+- **提示“暂时没连上 AI 接口”**：依次检查 AI 设置里是否已填 Key 并保存、网络能否访问接口地址、是否需要代理。
+- **怎么关掉开机自启**：打开 Windows“设置 → 应用 → 启动”，关闭 `word-cat-desktop-pet`。
+- **怎么彻底退出**：右键小猫（或托盘图标）→ 退出；关闭面板/聊天窗只是隐藏，猫咪仍在桌面。
+- **打卡数据会丢吗**：正常不会；误删可从用户数据目录 `backups\` 里取最近 3 份自动备份，平时建议用“导出打卡数据”留档。
+- **改了 `cat-personality.md` 没生效**：开发模式（`npm start`）即时生效；打包版需要重新 `npm run dist`。
