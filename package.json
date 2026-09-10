@@ -10,7 +10,7 @@
   "build": {
     "win": {
       "target": "portable",
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     }
   },
   "devDependencies": {

@@ -41,6 +41,7 @@ const PET_BASE_WIDTH = 270;
 const PET_BASE_HEIGHT = 420;
 const PET_RIGHT_MARGIN = 60;
 const PET_BOTTOM_MARGIN = 90;
+const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
 const PET_APPEARANCES = {
   work: '工作喵',
   sleep: '睡觉喵',
@@ -376,6 +377,7 @@ function createPetWindow() {
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: false,
+    icon: APP_ICON,
     focusable: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -407,6 +409,7 @@ function createPanelWindow() {
     minHeight: 600,
     title: '单词猫咪 · 打卡面板',
     backgroundColor: '#f6f8fc',
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -463,6 +466,7 @@ function createChatWindow() {
     title: '小猫聊天',
     backgroundColor: '#f3f5f7',
     autoHideMenuBar: true,
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
